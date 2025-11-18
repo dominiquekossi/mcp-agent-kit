@@ -1,0 +1,75 @@
+{
+  "name": "mcp-agent-kit",
+  "version": "1.0.0",
+  "description": "The easiest way to create MCP servers, AI agents, and chatbots with any LLM",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "build:clean": "rm -rf dist && npm run build",
+    "test": "jest",
+    "test:core": "node test-core.js",
+    "prepublishOnly": "npm run build",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "agent",
+    "llm",
+    "openai",
+    "anthropic",
+    "claude",
+    "gemini",
+    "ollama",
+    "chatbot",
+    "orchestrator",
+    "typescript",
+    "gpt-4",
+    "gpt-3.5",
+    "claude-3",
+    "function-calling",
+    "tools",
+    "router",
+    "multi-llm"
+  ],
+  "author": "dominiquekossi <houessoudominique@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dominiquekossi/mcp-agent-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dominiquekossi/mcp-agent-kit/issues"
+  },
+  "homepage": "https://github.com/dominiquekossi/mcp-agent-kit#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.69.0",
+    "@google/generative-ai": "^0.1.3",
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "openai": "^4.20.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.10.5",
+    "@types/ws": "^8.5.10",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.1.1",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
