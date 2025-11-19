@@ -109,13 +109,13 @@ export const DEFAULT_SMART_TOOL_CONFIG: Required<
 };
 
 /**
- * Merge user config with defaults
+ * Merge user config with defaults and validate
  */
 export function mergeConfig(
   userConfig?: SmartToolConfig
 ): Required<Omit<SmartToolConfig, "fallbackProvider">> &
   Pick<SmartToolConfig, "fallbackProvider"> {
-  return {
+  const merged = {
     ...DEFAULT_SMART_TOOL_CONFIG,
     ...userConfig,
     cacheResults: {
@@ -123,6 +123,41 @@ export function mergeConfig(
       ...userConfig?.cacheResults,
     },
   };
+
+  // Validate configuration
+  if (merged.maxRetries < 0) {
+    throw new Error("maxRetries must be >= 0");
+  }
+
+  if (merged.maxRetries > 10) {
+    console.warn(
+      `maxRetries is set to ${merged.maxRetries}. Consider using a lower value to avoid excessive API calls.`
+    );
+  }
+
+  if (merged.toolTimeout < 0) {
+    throw new Error("toolTimeout must be >= 0");
+  }
+
+  if (merged.toolTimeout < 1000) {
+    console.warn(
+      `toolTimeout is set to ${merged.toolTimeout}ms. This may be too short for most tools.`
+    );
+  }
+
+  if (merged.cacheResults.enabled && merged.cacheResults.ttl < 0) {
+    throw new Error("cache TTL must be >= 0");
+  }
+
+  if (
+    merged.cacheResults.enabled &&
+    merged.cacheResults.maxSize &&
+    merged.cacheResults.maxSize < 1
+  ) {
+    throw new Error("cache maxSize must be >= 1");
+  }
+
+  return merged;
 }
 
 /**

@@ -11,9 +11,35 @@ import { CachedResult, CacheConfig } from "./config";
 export class ToolCache {
   private cache: Map<string, CachedResult> = new Map();
   private config: CacheConfig;
+  private cleanupInterval?: NodeJS.Timeout;
 
   constructor(config: CacheConfig) {
     this.config = config;
+
+    // Setup automatic cleanup if cache is enabled
+    if (config.enabled && config.ttl > 0) {
+      // Run cleanup every 5 minutes or half the TTL, whichever is smaller
+      const cleanupFrequency = Math.min(300000, config.ttl / 2);
+      this.cleanupInterval = setInterval(() => {
+        this.clearExpired();
+      }, cleanupFrequency);
+
+      // Prevent the interval from keeping the process alive
+      if (this.cleanupInterval.unref) {
+        this.cleanupInterval.unref();
+      }
+    }
+  }
+
+  /**
+   * Destroy the cache and cleanup resources
+   */
+  destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = undefined;
+    }
+    this.clear();
   }
 
   /**
@@ -23,13 +49,19 @@ export class ToolCache {
    * @returns Cache key
    */
   generateKey(toolName: string, params: any): string {
-    if (this.config.key) {
-      return this.config.key(toolName, params);
-    }
+    try {
+      if (this.config.key) {
+        return this.config.key(toolName, params);
+      }
 
-    // Default key generation: toolName + JSON stringified params
-    const paramsStr = JSON.stringify(params, Object.keys(params).sort());
-    return `${toolName}:${paramsStr}`;
+      // Default key generation: toolName + JSON stringified params
+      const paramsStr = JSON.stringify(params, Object.keys(params).sort());
+      return `${toolName}:${paramsStr}`;
+    } catch (error) {
+      // Fallback to simple key if JSON.stringify fails
+      console.warn(`Failed to generate cache key for tool ${toolName}:`, error);
+      return `${toolName}:${Date.now()}`;
+    }
   }
 
   /**
@@ -68,20 +100,24 @@ export class ToolCache {
       return;
     }
 
-    // Check max size
-    if (this.config.maxSize && this.cache.size >= this.config.maxSize) {
-      // Remove oldest entry
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey) {
-        this.cache.delete(firstKey);
+    try {
+      // Check max size
+      if (this.config.maxSize && this.cache.size >= this.config.maxSize) {
+        // Remove oldest entry (LRU-like behavior)
+        const firstKey = this.cache.keys().next().value;
+        if (firstKey) {
+          this.cache.delete(firstKey);
+        }
       }
-    }
 
-    this.cache.set(key, {
-      result,
-      timestamp: Date.now(),
-      ttl: ttl || this.config.ttl,
-    });
+      this.cache.set(key, {
+        result,
+        timestamp: Date.now(),
+        ttl: ttl || this.config.ttl,
+      });
+    } catch (error) {
+      console.warn(`Failed to cache result for key ${key}:`, error);
+    }
   }
 
   /**

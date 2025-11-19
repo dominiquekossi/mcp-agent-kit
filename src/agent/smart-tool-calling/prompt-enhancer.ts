@@ -80,20 +80,25 @@ export class PromptEnhancer {
    * @returns Cleaned message
    */
   removeEnhancements(message: string): string {
-    // Remove common enhancement patterns
-    const patterns = [
-      /\n\nNote: You have tools available.*$/s,
-      /\n\nIMPORTANT: You MUST use.*$/s,
-      /\n\nCRITICAL: This is attempt.*$/s,
-      /\n\nAvailable tools:.*$/s,
-    ];
+    try {
+      // Remove common enhancement patterns
+      const patterns = [
+        /\n\nNote: You have tools available.*$/s,
+        /\n\nIMPORTANT: You MUST use.*$/s,
+        /\n\nCRITICAL: This is attempt.*$/s,
+        /\n\nAvailable tools:.*$/s,
+      ];
 
-    let cleaned = message;
-    for (const pattern of patterns) {
-      cleaned = cleaned.replace(pattern, "");
+      let cleaned = message;
+      for (const pattern of patterns) {
+        cleaned = cleaned.replace(pattern, "");
+      }
+
+      return cleaned.trim();
+    } catch (error) {
+      console.warn("Failed to remove enhancements from message:", error);
+      return message;
     }
-
-    return cleaned.trim();
   }
 }
 
