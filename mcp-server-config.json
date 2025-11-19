@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "mcp-agent-kit": {
+      "command": "npx",
+      "args": ["-y", "mcp-agent-kit"],
+      "env": {
+        "MCP_SERVER_NAME": "my-server",
+        "MCP_PORT": "7777",
+        "LOG_LEVEL": "info",
+        "OPENAI_API_KEY": "sk-...",
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "GEMINI_API_KEY": "...",
+        "OLLAMA_HOST": "http://localhost:11434"
+      }
+    }
+  }
+}

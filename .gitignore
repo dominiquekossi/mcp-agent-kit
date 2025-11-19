@@ -1,16 +1,20 @@
 # Dependencies
 node_modules/
-package-lock.json
 
-# Build
+# Build output
 dist/
-*.tsbuildinfo
 
-# Environment
+# Environment variables
 .env
-.env.local
+
+# Database
+prisma/dev.db
+prisma/dev.db-journal
+*.db
+*.db-journal
 
 # Logs
+logs/
 *.log
 npm-debug.log*
 
@@ -18,11 +22,11 @@ npm-debug.log*
 .vscode/
 .idea/
 *.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Test
-coverage/
-.nyc_output/
+# TypeScript
+*.tsbuildinfo
