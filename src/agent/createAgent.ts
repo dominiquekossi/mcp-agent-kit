@@ -9,10 +9,13 @@ import { OpenAIProvider } from './providers/openai';
 import { AnthropicProvider } from './providers/anthropic';
 import { GeminiProvider } from './providers/gemini';
 import { OllamaProvider } from './providers/ollama';
+import { RetryLogic, ToolCache } from './smart-tool-calling';
 
 export class Agent {
   private provider: any;
   private config: AgentConfig;
+  private retryLogic?: RetryLogic;
+  private toolCache?: ToolCache;
 
   constructor(config: AgentConfig) {
     // Merge with env defaults
@@ -28,7 +31,20 @@ export class Agent {
     // Initialize provider
     this.provider = this.createProvider();
     
-    logger.info(`Agent created with provider: ${config.provider}`);
+    // Initialize smart tool calling if configured
+    if (this.config.toolConfig) {
+      this.retryLogic = new RetryLogic(this.config.toolConfig);
+      
+      if (this.config.toolConfig.cacheResults?.enabled) {
+        this.toolCache = new ToolCache({
+          enabled: true,
+          ttl: this.config.toolConfig.cacheResults.ttl || 300000,
+          maxSize: this.config.toolConfig.cacheResults.maxSize || 100,
+        });
+      }
+    }
+    
+    logger.info(`Agent created with provider: ${config.provider}${this.config.toolConfig ? ' (Smart Tool Calling enabled)' : ''}`);
   }
 
   private getApiKeyFromEnv(provider: string, env: any): string | undefined {
@@ -73,6 +89,16 @@ export class Agent {
         role: 'system',
         content: this.config.system,
       });
+    }
+
+    // Use smart tool calling if configured
+    if (this.retryLogic && this.config.tools && this.config.tools.length > 0) {
+      const toolNames = this.config.tools.map(t => t.name);
+      return this.retryLogic.executeWithRetry(
+        (msgs) => this.provider.chat(msgs),
+        messageArray,
+        toolNames
+      );
     }
 
     return this.provider.chat(messageArray);
