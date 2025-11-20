@@ -1,7 +1,8 @@
 {
   "name": "mcp-agent-kit",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "The easiest way to create MCP servers, AI agents, and chatbots with any LLM",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {

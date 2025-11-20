@@ -134,6 +134,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced `createAgent()` with tool configuration support
 - Added `SmartToolConfig` type definition
 
+## [1.1.1] - 2024-11-20
+
+### Fixed
+
+- **ESM Compatibility**: Fixed critical issue where package was using CommonJS but dependencies required ESM
+- Changed package to use `"type": "module"` for proper ESM support
+- Updated TypeScript configuration to compile to ES2020 modules instead of CommonJS
+- Renamed `jest.config.js` to `jest.config.cjs` for compatibility
+
+### Technical Details
+
+- Package now properly supports ESM imports
+- Fixed `ERR_REQUIRE_ESM` error when importing from npm
+- All tests passing (32 tests, 4 suites)
+
 ## [Unreleased]
 
 ### Planned Features
@@ -148,5 +163,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.1.1]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.1.1
 [1.1.0]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.1.0
 [1.0.0]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.0.0
