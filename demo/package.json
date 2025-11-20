@@ -1,0 +1,24 @@
+{
+  "name": "mcp-agent-kit-demo",
+  "version": "1.0.0",
+  "description": "Demo API testing mcp-agent-kit features",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test:agent": "node src/tests/test-agent.js",
+    "test:router": "node src/tests/test-router.js",
+    "test:chatbot": "node src/tests/test-chatbot.js",
+    "test:tools": "node src/tests/test-smart-tools.js",
+    "test:all": "node src/tests/test-all.js"
+  },
+  "dependencies": {
+    "mcp-agent-kit": "^1.1.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
