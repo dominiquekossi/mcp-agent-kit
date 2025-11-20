@@ -50,6 +50,29 @@ export interface AgentTool {
   handler: (params: any) => Promise<any>;
 }
 
+// ============================================================================
+// Smart Tool Calling Types
+// ============================================================================
+
+export interface SmartToolConfig {
+  /** Force the model to use tools */
+  forceToolUse?: boolean;
+  /** Maximum number of retry attempts */
+  maxRetries?: number;
+  /** Action when tool is not called: retry, error, warn, or allow */
+  onToolNotCalled?: 'retry' | 'error' | 'warn' | 'allow';
+  /** Timeout for tool execution in milliseconds */
+  toolTimeout?: number;
+  /** Enable caching of tool results */
+  cacheResults?: {
+    enabled: boolean;
+    ttl?: number;
+    maxSize?: number;
+  };
+  /** Enable debug logging for tool calls */
+  debug?: boolean;
+}
+
 export interface AgentConfig {
   provider: LLMProvider;
   model?: string;
@@ -58,6 +81,8 @@ export interface AgentConfig {
   apiKey?: string;
   tools?: AgentTool[];
   system?: string;
+  /** Smart tool calling configuration */
+  toolConfig?: SmartToolConfig;
 }
 
 export interface AgentMessage {

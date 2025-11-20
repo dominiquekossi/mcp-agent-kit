@@ -163,6 +163,109 @@ const agent = createAgent({
 });
 ```
 
+### Smart Tool Calling
+
+Smart Tool Calling adds reliability and performance to tool execution with automatic retry, timeout, and caching.
+
+#### Basic Configuration
+
+```typescript
+const agent = createAgent({
+  provider: "openai",
+  toolConfig: {
+    forceToolUse: true,      // Force model to use tools
+    maxRetries: 3,           // Retry up to 3 times on failure
+    toolTimeout: 30000,      // 30 second timeout
+    onToolNotCalled: "retry", // Action when tool not called
+  },
+  tools: [...],
+});
+```
+
+#### With Caching
+
+```typescript
+const agent = createAgent({
+  provider: "openai",
+  toolConfig: {
+    cacheResults: {
+      enabled: true,
+      ttl: 300000,    // Cache for 5 minutes
+      maxSize: 100,   // Store up to 100 results
+    },
+  },
+  tools: [...],
+});
+```
+
+#### Direct Tool Execution
+
+```typescript
+// Execute a tool directly with retry and caching
+const result = await agent.executeTool("get_weather", {
+  location: "San Francisco, CA",
+});
+```
+
+#### Configuration Options
+
+| Option                 | Type    | Default | Description                                                    |
+| ---------------------- | ------- | ------- | -------------------------------------------------------------- |
+| `forceToolUse`         | boolean | false   | Force the model to use tools when available                    |
+| `maxRetries`           | number  | 3       | Maximum retry attempts on tool failure                         |
+| `onToolNotCalled`      | string  | "retry" | Action when tool not called: "retry", "error", "warn", "allow" |
+| `toolTimeout`          | number  | 30000   | Timeout for tool execution (ms)                                |
+| `cacheResults.enabled` | boolean | true    | Enable result caching                                          |
+| `cacheResults.ttl`     | number  | 300000  | Cache time-to-live (ms)                                        |
+| `cacheResults.maxSize` | number  | 100     | Maximum cached results                                         |
+| `debug`                | boolean | false   | Enable debug logging                                           |
+
+#### Complete Example
+
+```typescript
+const agent = createAgent({
+  provider: "openai",
+  model: "gpt-4-turbo-preview",
+  toolConfig: {
+    forceToolUse: true,
+    maxRetries: 3,
+    onToolNotCalled: "retry",
+    toolTimeout: 30000,
+    cacheResults: {
+      enabled: true,
+      ttl: 300000,
+      maxSize: 100,
+    },
+    debug: true,
+  },
+  tools: [
+    {
+      name: "get_weather",
+      description: "Get current weather for a location",
+      parameters: {
+        type: "object",
+        properties: {
+          location: { type: "string" },
+        },
+        required: ["location"],
+      },
+      handler: async ({ location }) => {
+        // Your weather API logic
+        return { location, temp: 72, condition: "Sunny" };
+      },
+    },
+  ],
+});
+
+// Use in chat - tools are automatically called
+const response = await agent.chat("What's the weather in NYC?");
+
+// Or execute directly with retry and caching
+const result = await agent.executeTool("get_weather", {
+  location: "New York, NY",
+});
+```
+
 ---
 
 ## MCP Servers
@@ -443,6 +546,7 @@ The package automatically loads `.env` files using `dotenv`.
 Check out the `/examples` directory for complete working examples:
 
 - `basic-agent.ts` - Simple agent usage
+- `smart-tool-calling.ts` - Smart tool calling with retry and caching
 - `mcp-server.ts` - MCP server with tools and resources
 - `mcp-server-websocket.ts` - MCP server with WebSocket
 - `llm-router.ts` - Intelligent routing between LLMs
@@ -459,6 +563,143 @@ npm install
 # Run an example
 npx ts-node examples/basic-agent.ts
 ```
+
+---
+
+## API Reference
+
+### Agent API
+
+#### `createAgent(config: AgentConfig)`
+
+Creates a new AI agent instance.
+
+**Parameters:**
+
+- `provider` (required): LLM provider - "openai", "anthropic", "gemini", or "ollama"
+- `model` (optional): Model name (defaults to provider's default)
+- `temperature` (optional): Sampling temperature 0-2 (default: 0.7)
+- `maxTokens` (optional): Maximum tokens in response (default: 2000)
+- `apiKey` (optional): API key (reads from env if not provided)
+- `tools` (optional): Array of tool definitions
+- `system` (optional): System prompt
+- `toolConfig` (optional): Smart tool calling configuration
+
+**Returns:** Agent instance
+
+**Methods:**
+
+- `chat(message: string): Promise<AgentResponse>` - Send a message and get response
+- `executeTool(name: string, params: any): Promise<any>` - Execute a tool directly
+
+#### `AgentResponse`
+
+Response object from agent.chat():
+
+```typescript
+{
+  content: string;           // Response text
+  toolCalls?: Array<{        // Tools that were called
+    name: string;
+    arguments: any;
+  }>;
+  usage?: {                  // Token usage
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+}
+```
+
+### MCP Server API
+
+#### `createMCPServer(config: MCPServerConfig)`
+
+Creates a new MCP server instance.
+
+**Parameters:**
+
+- `name` (optional): Server name (default: from env or "mcp-server")
+- `port` (optional): Port number (default: 7777)
+- `logLevel` (optional): Log level - "debug", "info", "warn", "error"
+- `tools` (optional): Array of tool definitions
+- `resources` (optional): Array of resource definitions
+
+**Returns:** MCP Server instance
+
+**Methods:**
+
+- `start(transport?: "stdio" | "websocket"): Promise<void>` - Start the server
+
+### Router API
+
+#### `createLLMRouter(config: LLMRouterConfig)`
+
+Creates a new LLM router instance.
+
+**Parameters:**
+
+- `rules` (required): Array of routing rules
+- `fallback` (optional): Fallback provider configuration
+- `retryAttempts` (optional): Number of retry attempts (default: 3)
+- `logLevel` (optional): Log level
+
+**Returns:** Router instance
+
+**Methods:**
+
+- `route(input: string): Promise<AgentResponse>` - Route input to appropriate LLM
+- `getStats(): object` - Get router statistics
+- `listAgents(): string[]` - List all configured agents
+
+### Chatbot API
+
+#### `createChatbot(config: ChatbotConfig)`
+
+Creates a new chatbot instance with conversation memory.
+
+**Parameters:**
+
+- `agent` or `router` (required): Agent or router instance
+- `system` (optional): System prompt
+- `maxHistory` (optional): Maximum messages to keep (default: 10)
+
+**Returns:** Chatbot instance
+
+**Methods:**
+
+- `chat(message: string): Promise<AgentResponse>` - Send message with context
+- `getHistory(): ChatMessage[]` - Get conversation history
+- `getStats(): object` - Get conversation statistics
+- `reset(): void` - Clear conversation history
+- `setSystemPrompt(prompt: string): void` - Update system prompt
+
+### API Request Helpers
+
+#### `api.request(config: APIRequestConfig)`
+
+Make HTTP request with retry and timeout.
+
+**Parameters:**
+
+- `name` (optional): Request name for logging
+- `url` (required): Request URL
+- `method` (optional): HTTP method (default: "GET")
+- `headers` (optional): Request headers
+- `query` (optional): Query parameters
+- `body` (optional): Request body
+- `timeout` (optional): Timeout in ms (default: 30000)
+- `retries` (optional): Retry attempts (default: 3)
+
+**Returns:** `Promise<APIResponse>`
+
+**Convenience Methods:**
+
+- `api.get(url, config?)` - GET request
+- `api.post(url, body, config?)` - POST request
+- `api.put(url, body, config?)` - PUT request
+- `api.patch(url, body, config?)` - PATCH request
+- `api.delete(url, config?)` - DELETE request
 
 ---
 
