@@ -156,6 +156,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Package Size**: Excluded demo folder from npm package (reduced from 3.7MB to ~54KB)
 - Updated .npmignore to prevent demo files from being published
 
+## [1.1.3] - 2024-11-20
+
+### Fixed
+
+- **ESM/CommonJS Compatibility**: Fixed module resolution issues by using dynamic imports for MCP SDK
+- Changed `createMCPServer` to async function to support dynamic imports
+- Reverted to CommonJS compilation with dynamic ESM imports for better compatibility
+- All tests passing (32 tests, 4 suites)
+
+### Changed
+
+- `createMCPServer()` is now async and returns `Promise<MCPServer>`
+- MCP SDK modules are loaded dynamically to avoid ESM/CommonJS conflicts
+
 ## [Unreleased]
 
 ### Planned Features
@@ -170,6 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.1.3]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.1.3
 [1.1.2]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.1.2
 [1.1.1]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.1.1
 [1.1.0]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.1.0

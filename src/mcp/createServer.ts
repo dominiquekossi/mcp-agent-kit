@@ -2,32 +2,53 @@
  * MCP Server - Create a complete MCP server with one function
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-import { MCPServerConfig, MCPTool, MCPResource } from '../types';
-import { getEnv } from '../core/env';
-import { logger, createLogger, Logger } from '../core/logger';
-import { WebSocketTransport } from './transport';
+import { MCPServerConfig, MCPTool, MCPResource } from "../types";
+import { getEnv } from "../core/env";
+import { logger, createLogger, Logger } from "../core/logger";
+import { WebSocketTransport } from "./transport";
+
+// Dynamic imports for ESM modules
+let Server: any;
+let StdioServerTransport: any;
+let CallToolRequestSchema: any;
+let ListToolsRequestSchema: any;
+let ListResourcesRequestSchema: any;
+let ReadResourceRequestSchema: any;
+
+async function loadMCPSDK() {
+  if (!Server) {
+    const serverModule = await import(
+      "@modelcontextprotocol/sdk/server/index.js"
+    );
+    Server = serverModule.Server;
+
+    const stdioModule = await import(
+      "@modelcontextprotocol/sdk/server/stdio.js"
+    );
+    StdioServerTransport = stdioModule.StdioServerTransport;
+
+    const typesModule = await import("@modelcontextprotocol/sdk/types.js");
+    CallToolRequestSchema = typesModule.CallToolRequestSchema;
+    ListToolsRequestSchema = typesModule.ListToolsRequestSchema;
+    ListResourcesRequestSchema = typesModule.ListResourcesRequestSchema;
+    ReadResourceRequestSchema = typesModule.ReadResourceRequestSchema;
+  }
+}
 
 export class MCPServer {
-  private server: Server;
+  private server: any;
   private config: MCPServerConfig;
   private tools: Map<string, MCPTool>;
   private resources: Map<string, MCPResource>;
   private logger: Logger;
   private isRunning: boolean = false;
   private wsTransport: WebSocketTransport | null = null;
-  private transportType: 'stdio' | 'websocket' = 'stdio';
+  private transportType: "stdio" | "websocket" = "stdio";
+  private initialized: boolean = false;
 
-  constructor(config: MCPServerConfig = {}) {
+  private constructor(config: MCPServerConfig = {}) {
     const env = getEnv();
-    
+
     this.config = {
       name: config.name || env.mcpServerName,
       port: config.port || env.mcpPort,
@@ -36,17 +57,27 @@ export class MCPServer {
       resources: config.resources || [],
     };
 
-    this.logger = createLogger(this.config.logLevel, `mcp-server:${this.config.name}`);
+    this.logger = createLogger(
+      this.config.logLevel,
+      `mcp-server:${this.config.name}`
+    );
     this.tools = new Map();
     this.resources = new Map();
 
-    this.config.tools?.forEach(tool => this.registerTool(tool));
-    this.config.resources?.forEach(resource => this.registerResource(resource));
+    this.config.tools?.forEach((tool) => this.registerTool(tool));
+    this.config.resources?.forEach((resource) =>
+      this.registerResource(resource)
+    );
+  }
 
-    this.server = new Server(
+  static async create(config: MCPServerConfig = {}): Promise<MCPServer> {
+    await loadMCPSDK();
+    const instance = new MCPServer(config);
+
+    instance.server = new Server(
       {
-        name: this.config.name!,
-        version: '1.0.0',
+        name: instance.config.name!,
+        version: "1.0.0",
       },
       {
         capabilities: {
@@ -56,15 +87,17 @@ export class MCPServer {
       }
     );
 
-    this.setupHandlers();
-    this.logger.info(`MCP Server initialized: ${this.config.name}`);
+    instance.setupHandlers();
+    instance.initialized = true;
+    instance.logger.info(`MCP Server initialized: ${instance.config.name}`);
+    return instance;
   }
 
   private setupHandlers(): void {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      this.logger.debug('Listing tools');
+      this.logger.debug("Listing tools");
       return {
-        tools: Array.from(this.tools.values()).map(tool => ({
+        tools: Array.from(this.tools.values()).map((tool) => ({
           name: tool.name,
           description: tool.description,
           inputSchema: tool.inputSchema,
@@ -72,70 +105,80 @@ export class MCPServer {
       };
     });
 
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
-      this.logger.debug(`Tool called: ${name}`, args);
+    this.server.setRequestHandler(
+      CallToolRequestSchema,
+      async (request: any) => {
+        const { name, arguments: args } = request.params;
+        this.logger.debug(`Tool called: ${name}`, args);
 
-      const tool = this.tools.get(name);
-      if (!tool) {
-        throw new Error(`Tool not found: ${name}`);
-      }
+        const tool = this.tools.get(name);
+        if (!tool) {
+          throw new Error(`Tool not found: ${name}`);
+        }
 
-      try {
-        const result = await tool.handler(args || {});
-        this.logger.debug(`Tool ${name} executed successfully`);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      } catch (error: any) {
-        this.logger.error(`Tool ${name} failed:`, error.message);
-        throw error;
+        try {
+          const result = await tool.handler(args || {});
+          this.logger.debug(`Tool ${name} executed successfully`);
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  typeof result === "string"
+                    ? result
+                    : JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        } catch (error: any) {
+          this.logger.error(`Tool ${name} failed:`, error.message);
+          throw error;
+        }
       }
-    });
+    );
 
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-      this.logger.debug('Listing resources');
+      this.logger.debug("Listing resources");
       return {
-        resources: Array.from(this.resources.values()).map(resource => ({
+        resources: Array.from(this.resources.values()).map((resource) => ({
           uri: resource.uri,
           name: resource.name,
           description: resource.description,
-          mimeType: resource.mimeType || 'text/plain',
+          mimeType: resource.mimeType || "text/plain",
         })),
       };
     });
 
-    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-      const { uri } = request.params;
-      this.logger.debug(`Resource requested: ${uri}`);
+    this.server.setRequestHandler(
+      ReadResourceRequestSchema,
+      async (request: any) => {
+        const { uri } = request.params;
+        this.logger.debug(`Resource requested: ${uri}`);
 
-      const resource = this.resources.get(uri);
-      if (!resource) {
-        throw new Error(`Resource not found: ${uri}`);
-      }
+        const resource = this.resources.get(uri);
+        if (!resource) {
+          throw new Error(`Resource not found: ${uri}`);
+        }
 
-      try {
-        const content = await resource.handler();
-        this.logger.debug(`Resource ${uri} read successfully`);
-        return {
-          contents: [
-            {
-              uri: resource.uri,
-              mimeType: resource.mimeType || 'text/plain',
-              text: typeof content === 'string' ? content : content.toString(),
-            },
-          ],
-        };
-      } catch (error: any) {
-        this.logger.error(`Resource ${uri} failed:`, error.message);
-        throw error;
+        try {
+          const content = await resource.handler();
+          this.logger.debug(`Resource ${uri} read successfully`);
+          return {
+            contents: [
+              {
+                uri: resource.uri,
+                mimeType: resource.mimeType || "text/plain",
+                text:
+                  typeof content === "string" ? content : content.toString(),
+              },
+            ],
+          };
+        } catch (error: any) {
+          this.logger.error(`Resource ${uri} failed:`, error.message);
+          throw error;
+        }
       }
-    });
+    );
   }
 
   registerTool(tool: MCPTool): void {
@@ -148,17 +191,19 @@ export class MCPServer {
     this.resources.set(resource.uri, resource);
   }
 
-  async start(transport?: 'stdio' | 'websocket'): Promise<void> {
+  async start(transport?: "stdio" | "websocket"): Promise<void> {
     if (this.isRunning) {
-      this.logger.warn('Server is already running');
+      this.logger.warn("Server is already running");
       return;
     }
 
-    this.transportType = transport || 'stdio';
+    this.transportType = transport || "stdio";
 
     try {
-      if (this.transportType === 'websocket') {
-        this.logger.info(`Starting MCP Server on WebSocket (port ${this.config.port})...`);
+      if (this.transportType === "websocket") {
+        this.logger.info(
+          `Starting MCP Server on WebSocket (port ${this.config.port})...`
+        );
         this.wsTransport = new WebSocketTransport(
           { port: this.config.port! },
           this.logger
@@ -169,41 +214,49 @@ export class MCPServer {
         const stdioTransport = new StdioServerTransport();
         await this.server.connect(stdioTransport);
       }
-      
+
       this.isRunning = true;
-      this.logger.info(`MCP Server started successfully (${this.transportType})`);
+      this.logger.info(
+        `MCP Server started successfully (${this.transportType})`
+      );
       this.logger.info(`Tools registered: ${this.tools.size}`);
       this.logger.info(`Resources registered: ${this.resources.size}`);
     } catch (error: any) {
-      this.logger.error('Failed to start server:', error.message);
+      this.logger.error("Failed to start server:", error.message);
       throw error;
     }
   }
 
   async stop(): Promise<void> {
     if (!this.isRunning) {
-      this.logger.warn('Server is not running');
+      this.logger.warn("Server is not running");
       return;
     }
 
     try {
-      this.logger.info('Stopping MCP Server...');
-      
+      this.logger.info("Stopping MCP Server...");
+
       if (this.wsTransport) {
         await this.wsTransport.stop();
         this.wsTransport = null;
       }
-      
+
       await this.server.close();
       this.isRunning = false;
-      this.logger.info('MCP Server stopped');
+      this.logger.info("MCP Server stopped");
     } catch (error: any) {
-      this.logger.error('Failed to stop server:', error.message);
+      this.logger.error("Failed to stop server:", error.message);
       throw error;
     }
   }
 
-  getStatus(): { running: boolean; tools: number; resources: number; transport: string; clients?: number } {
+  getStatus(): {
+    running: boolean;
+    tools: number;
+    resources: number;
+    transport: string;
+    clients?: number;
+  } {
     const status: any = {
       running: this.isRunning,
       tools: this.tools.size,
@@ -219,6 +272,8 @@ export class MCPServer {
   }
 }
 
-export function createMCPServer(config?: MCPServerConfig): MCPServer {
-  return new MCPServer(config);
+export async function createMCPServer(
+  config?: MCPServerConfig
+): Promise<MCPServer> {
+  return await MCPServer.create(config);
 }
