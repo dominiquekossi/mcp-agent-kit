@@ -1,8 +1,12 @@
 /**
  * Smart Tool Calling Module
- * Provides retry logic, caching, and enhanced tool calling capabilities
+ * Exports all smart tool calling functionality
  */
 
-export { RetryLogic } from './retry-logic';
-export { ToolCache } from './cache';
-export { mergeConfig, DEFAULT_SMART_TOOL_CONFIG } from './config';
+export { DEFAULT_SMART_TOOL_CONFIG, mergeConfig } from "./config";
+export { RetryLogic, type RetryOptions, type RetryResult } from "./retry-logic";
+export {
+  PromptEnhancer,
+  type PromptEnhancementOptions,
+} from "./prompt-enhancer";
+export { ToolCache, type CacheConfig } from "./cache";

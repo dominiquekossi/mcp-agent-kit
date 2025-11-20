@@ -1,5 +1,5 @@
 /**
- * Tool Result Cache
+ * Tool Result Caching for Smart Tool Calling
  */
 
 export interface CacheConfig {
@@ -8,115 +8,98 @@ export interface CacheConfig {
   maxSize: number;
 }
 
-interface CachedResult {
-  result: any;
+interface CacheEntry<T = any> {
+  value: T;
   timestamp: number;
-  ttl: number;
+  hits: number;
 }
 
 /**
- * Simple in-memory cache for tool results
+ * ToolCache class handles caching of tool results with TTL and auto-cleanup
  */
 export class ToolCache {
-  private cache: Map<string, CachedResult> = new Map();
-  private config: CacheConfig;
-  private cleanupInterval?: NodeJS.Timeout;
+  private cache: Map<string, CacheEntry> = new Map();
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
-  constructor(config: CacheConfig) {
-    this.config = config;
-
-    // Setup automatic cleanup
-    if (config.enabled && config.ttl > 0) {
-      const cleanupFrequency = Math.min(300000, config.ttl / 2); // Every 5 min or TTL/2
-      this.cleanupInterval = setInterval(() => {
-        this.clearExpired();
-      }, cleanupFrequency);
-
-      // Don't keep process alive
-      if (this.cleanupInterval.unref) {
-        this.cleanupInterval.unref();
-      }
+  constructor(private config: CacheConfig) {
+    if (config.enabled) {
+      this.startAutoCleanup();
     }
   }
 
   /**
-   * Get cached result
+   * Get cached result if available and not expired
    */
-  get(key: string): any | null {
+  get<T = any>(key: string): T | null {
     if (!this.config.enabled) {
       return null;
     }
 
-    const cached = this.cache.get(key);
-    if (!cached) {
+    const entry = this.cache.get(key);
+
+    if (!entry) {
       return null;
     }
 
     // Check if expired
-    const now = Date.now();
-    if (now - cached.timestamp > cached.ttl) {
+    const age = Date.now() - entry.timestamp;
+    if (age > this.config.ttl) {
       this.cache.delete(key);
       return null;
     }
 
-    return cached.result;
+    // Increment hit counter
+    entry.hits++;
+
+    return entry.value as T;
   }
 
   /**
-   * Set cached result
+   * Set cache entry
    */
-  set(key: string, result: any, ttl?: number): void {
+  set<T = any>(key: string, value: T): void {
     if (!this.config.enabled) {
       return;
     }
 
-    try {
-      // Check size limit
-      if (this.cache.size >= this.config.maxSize) {
-        // Remove oldest entry (simple LRU)
-        const firstKey = this.cache.keys().next().value;
-        if (firstKey) {
-          this.cache.delete(firstKey);
-        }
-      }
-
-      this.cache.set(key, {
-        result,
-        timestamp: Date.now(),
-        ttl: ttl || this.config.ttl,
-      });
-    } catch (error) {
-      console.warn('Failed to cache result:', error);
+    // Check if cache is full
+    if (this.cache.size >= this.config.maxSize && !this.cache.has(key)) {
+      this.evictLRU();
     }
+
+    this.cache.set(key, {
+      value,
+      timestamp: Date.now(),
+      hits: 0,
+    });
   }
 
   /**
-   * Generate cache key
+   * Check if key exists and is not expired
    */
-  generateKey(toolName: string, params: any): string {
-    try {
-      const paramsStr = JSON.stringify(params, Object.keys(params || {}).sort());
-      return `${toolName}:${paramsStr}`;
-    } catch (error) {
-      console.warn('Failed to generate cache key:', error);
-      return `${toolName}:${Date.now()}`;
+  has(key: string): boolean {
+    if (!this.config.enabled) {
+      return false;
     }
+
+    const entry = this.cache.get(key);
+
+    if (!entry) {
+      return false;
+    }
+
+    // Check if expired
+    const age = Date.now() - entry.timestamp;
+    if (age > this.config.ttl) {
+      this.cache.delete(key);
+      return false;
+    }
+
+    return true;
   }
 
   /**
-   * Clear expired entries
-   */
-  clearExpired(): void {
-    const now = Date.now();
-    for (const [key, cached] of this.cache.entries()) {
-      if (now - cached.timestamp > cached.ttl) {
-        this.cache.delete(key);
-      }
-    }
-  }
-
-  /**
-   * Clear all cache
+   * Clear all cache entries
    */
   clear(): void {
     this.cache.clear();
@@ -126,20 +109,95 @@ export class ToolCache {
    * Get cache statistics
    */
   getStats() {
+    const entries = Array.from(this.cache.values());
+    const totalHits = entries.reduce((sum, entry) => sum + entry.hits, 0);
+
     return {
       size: this.cache.size,
       maxSize: this.config.maxSize,
+      totalHits,
       enabled: this.config.enabled,
     };
   }
 
   /**
-   * Cleanup resources
+   * Generate cache key from tool name and parameters
    */
-  destroy(): void {
+  static generateKey(toolName: string, params: any): string {
+    // Create a stable string representation of params
+    const paramsStr = JSON.stringify(params, Object.keys(params).sort());
+    return `${toolName}:${paramsStr}`;
+  }
+
+  /**
+   * Evict least recently used entry
+   */
+  private evictLRU(): void {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+
+    // Find the oldest entry (LRU)
+    for (const [key, entry] of this.cache.entries()) {
+      if (entry.timestamp < oldestTime) {
+        oldestTime = entry.timestamp;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      this.cache.delete(oldestKey);
+    }
+  }
+
+  /**
+   * Start automatic cleanup of expired entries
+   */
+  private startAutoCleanup(): void {
+    // Run cleanup every minute
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup();
+    }, 60000);
+
+    // Ensure cleanup runs on process exit
+    if (typeof process !== "undefined") {
+      process.on("beforeExit", () => {
+        this.stopAutoCleanup();
+      });
+    }
+  }
+
+  /**
+   * Stop automatic cleanup
+   */
+  stopAutoCleanup(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
     }
-    this.clear();
+  }
+
+  /**
+   * Remove expired entries
+   */
+  private cleanup(): void {
+    const now = Date.now();
+    const keysToDelete: string[] = [];
+
+    for (const [key, entry] of this.cache.entries()) {
+      const age = now - entry.timestamp;
+      if (age > this.config.ttl) {
+        keysToDelete.push(key);
+      }
+    }
+
+    for (const key of keysToDelete) {
+      this.cache.delete(key);
+    }
+
+    if (keysToDelete.length > 0) {
+      console.log(
+        `[ToolCache] Cleaned up ${keysToDelete.length} expired entries`
+      );
+    }
   }
 }

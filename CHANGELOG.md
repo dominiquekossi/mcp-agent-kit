@@ -86,6 +86,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@anthropic-ai/sdk`: ^0.9.0
 - `@google/generative-ai`: ^0.1.3
 
+## [1.1.0] - 2024-11-20
+
+### Added
+
+#### Smart Tool Calling
+
+- **Automatic Retry Logic**: Tools now automatically retry on failure with configurable max attempts (default: 3)
+- **Timeout Support**: Set execution timeouts for tools to prevent hanging (default: 30s)
+- **Result Caching**: Cache tool results with configurable TTL and max size for improved performance
+- **Force Tool Use**: Option to force the model to use tools when available
+- **Flexible Error Handling**: Configure behavior when tools aren't called: retry, error, warn, or allow
+- **Debug Mode**: Enhanced logging for tool execution and retry attempts
+- **Direct Tool Execution**: New `executeTool()` method for direct tool invocation with retry and caching
+
+#### Configuration
+
+- New `toolConfig` option in `createAgent()` with comprehensive settings:
+  - `forceToolUse`: Force model to use tools (default: false)
+  - `maxRetries`: Maximum retry attempts (default: 3)
+  - `onToolNotCalled`: Action when tool not called (default: "retry")
+  - `toolTimeout`: Timeout in milliseconds (default: 30000)
+  - `cacheResults`: Caching configuration with enabled, ttl, and maxSize options
+  - `debug`: Enable debug logging (default: false)
+
+#### Documentation
+
+- Added comprehensive Smart Tool Calling section to README
+- Added complete API Reference section with all methods and types
+- Added `smart-tool-calling.ts` example demonstrating all features
+- Updated examples list in documentation
+
+#### Testing
+
+- Added comprehensive test suite for smart tool calling features
+- E2E tests for retry logic, timeout, and caching
+- Integration tests for tool execution
+- Cache behavior tests
+
+### Technical Details
+
+- New modules:
+  - `src/agent/smart-tool-calling/retry-logic.ts`: Retry mechanism implementation
+  - `src/agent/smart-tool-calling/cache.ts`: Result caching system
+  - `src/agent/smart-tool-calling/config.ts`: Configuration management
+  - `src/agent/smart-tool-calling/index.ts`: Main smart tool calling orchestrator
+- Enhanced `createAgent()` with tool configuration support
+- Added `SmartToolConfig` type definition
+
 ## [Unreleased]
 
 ### Planned Features
@@ -100,4 +148,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.1.0]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.1.0
 [1.0.0]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.0.0
