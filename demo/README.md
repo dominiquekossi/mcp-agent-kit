@@ -1,6 +1,17 @@
 # MCP Agent Kit Demo - Library API
 
-Demo API para testar todas as funcionalidades do `mcp-agent-kit` v1.1.0.
+> 🔒 **Branch Privada de Testes** - Simula um usuário externo usando o pacote via npm
+
+Demo API para testar todas as funcionalidades do `mcp-agent-kit` instalado diretamente do npm.
+
+## ⚠️ Importante
+
+Esta branch **NÃO** usa o código fonte local. Ela instala o pacote `mcp-agent-kit` do npm como um usuário externo faria, garantindo que:
+
+- ✅ O pacote publicado funciona corretamente
+- ✅ Todas as features estão acessíveis
+- ✅ A documentação está correta
+- ✅ Não há dependências quebradas
 
 ## Estrutura
 
@@ -23,6 +34,27 @@ demo/
 ├── package.json
 └── .env
 ```
+
+## 🔄 Workflow de Testes
+
+Sempre que uma nova versão for publicada no npm:
+
+1. **Atualizar o pacote:**
+
+   ```bash
+   npm run update:package
+   ```
+
+2. **Verificar versão:**
+
+   ```bash
+   npm run check:version
+   ```
+
+3. **Rodar todos os testes:**
+   ```bash
+   npm run verify
+   ```
 
 ## Features Testadas
 

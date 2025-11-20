@@ -1,5 +1,7 @@
 # Quick Start Guide
 
+> 🔒 Esta é uma branch de testes que usa o pacote `mcp-agent-kit` do npm, não o código fonte local.
+
 ## 🚀 Setup Rápido (5 minutos)
 
 ### 1. Instalar Dependências
@@ -29,7 +31,15 @@ GEMINI_API_KEY=AIza...
 - Groq: https://console.groq.com/keys (Grátis!)
 - Gemini: https://makersuite.google.com/app/apikey (Grátis!)
 
-### 3. Testar Tudo
+### 3. Verificar Versão do Pacote
+
+```bash
+npm run check:version
+```
+
+Isso mostra qual versão do `mcp-agent-kit` está instalada do npm.
+
+### 4. Testar Tudo
 
 ```bash
 npm run test:all
@@ -42,10 +52,25 @@ Isso vai executar todos os testes e validar:
 - ✅ LLM Router
 - ✅ Chatbot com memória
 
-### 4. Iniciar API
+### 5. Iniciar API
 
 ```bash
 npm start
+```
+
+## 🔄 Atualizando para Nova Versão
+
+Quando uma nova versão do `mcp-agent-kit` for publicada:
+
+```bash
+# 1. Atualizar para a versão mais recente
+npm run update:package
+
+# 2. Verificar a versão instalada
+npm run check:version
+
+# 3. Rodar todos os testes
+npm run verify
 ```
 
 A API estará rodando em `http://localhost:3000`

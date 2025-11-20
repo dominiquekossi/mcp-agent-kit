@@ -11,7 +11,10 @@
     "test:router": "node src/tests/test-router.js",
     "test:chatbot": "node src/tests/test-chatbot.js",
     "test:tools": "node src/tests/test-smart-tools.js",
-    "test:all": "node src/tests/test-all.js"
+    "test:all": "node src/tests/test-all.js",
+    "update:package": "npm install mcp-agent-kit@latest",
+    "check:version": "node check-version.js",
+    "verify": "npm run check:version && npm run test:all"
   },
   "dependencies": {
     "mcp-agent-kit": "^1.1.0",
