@@ -12,9 +12,8 @@ async function testRetryLogic() {
   
   const agent = createAgent({
     provider: 'openai',
-    model: 'llama3-70b-8192',
-    apiKey: process.env.GROQ_API_KEY,
-    baseURL: 'https://api.groq.com/openai/v1',
+    model: 'gpt-4o-mini',
+    apiKey: process.env.OPENAI_API_KEY,
     toolConfig: {
       maxRetries: 3,
       debug: true
@@ -58,9 +57,8 @@ async function testTimeout() {
   
   const agent = createAgent({
     provider: 'openai',
-    model: 'llama3-70b-8192',
-    apiKey: process.env.GROQ_API_KEY,
-    baseURL: 'https://api.groq.com/openai/v1',
+    model: 'gpt-4o-mini',
+    apiKey: process.env.OPENAI_API_KEY,
     toolConfig: {
       toolTimeout: 2000, // 2 seconds
       debug: true
@@ -102,9 +100,8 @@ async function testCaching() {
   
   const agent = createAgent({
     provider: 'openai',
-    model: 'llama3-70b-8192',
-    apiKey: process.env.GROQ_API_KEY,
-    baseURL: 'https://api.groq.com/openai/v1',
+    model: 'gpt-4o-mini',
+    apiKey: process.env.OPENAI_API_KEY,
     toolConfig: {
       cacheResults: {
         enabled: true,
@@ -160,9 +157,8 @@ async function testForceToolUse() {
   
   const agent = createAgent({
     provider: 'openai',
-    model: 'llama3-70b-8192',
-    apiKey: process.env.GROQ_API_KEY,
-    baseURL: 'https://api.groq.com/openai/v1',
+    model: 'gpt-4o-mini',
+    apiKey: process.env.OPENAI_API_KEY,
     toolConfig: {
       forceToolUse: true,
       debug: true

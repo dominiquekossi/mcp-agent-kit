@@ -14,33 +14,31 @@ async function testRouter() {
         when: (input) => input.toLowerCase().includes('code'),
         use: {
           provider: 'openai',
-          model: 'llama3-70b-8192',
-          apiKey: process.env.GROQ_API_KEY,
-          baseURL: 'https://api.groq.com/openai/v1'
+          model: 'gpt-4o-mini',
+          apiKey: process.env.OPENAI_API_KEY
         }
       },
       {
         when: (input) => input.length < 50,
         use: {
-          provider: 'gemini',
-          model: 'gemini-2.0-flash-exp',
-          apiKey: process.env.GEMINI_API_KEY
+          provider: 'openai',
+          model: 'gpt-3.5-turbo',
+          apiKey: process.env.OPENAI_API_KEY
         }
       },
       {
         default: true,
         use: {
           provider: 'openai',
-          model: 'llama3-70b-8192',
-          apiKey: process.env.GROQ_API_KEY,
-          baseURL: 'https://api.groq.com/openai/v1'
+          model: 'gpt-4o-mini',
+          apiKey: process.env.OPENAI_API_KEY
         }
       }
     ],
     fallback: {
-      provider: 'gemini',
-      model: 'gemini-2.0-flash-exp',
-      apiKey: process.env.GEMINI_API_KEY
+      provider: 'openai',
+      model: 'gpt-3.5-turbo',
+      apiKey: process.env.OPENAI_API_KEY
     },
     retryAttempts: 2,
     logLevel: 'info'
@@ -59,7 +57,7 @@ async function testRouter() {
     const response1 = await router.route('Explain how to write clean code');
     console.log('   ✅', response1.content.substring(0, 100) + '...');
     
-    console.log('\n   Query 2 (should use Gemini - short):');
+    console.log('\n   Query 2 (should use GPT-3.5-turbo - short):');
     const response2 = await router.route('What is AI?');
     console.log('   ✅', response2.content.substring(0, 100) + '...');
     

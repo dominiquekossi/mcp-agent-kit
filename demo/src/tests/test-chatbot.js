@@ -10,9 +10,8 @@ async function testChatbot() {
   
   const agent = createAgent({
     provider: 'openai',
-    model: 'llama3-70b-8192',
-    apiKey: process.env.GROQ_API_KEY,
-    baseURL: 'https://api.groq.com/openai/v1'
+    model: 'gpt-4o-mini',
+    apiKey: process.env.OPENAI_API_KEY
   });
 
   const bot = createChatbot({

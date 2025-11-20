@@ -6,11 +6,16 @@ dotenv.config();
 console.log('🧪 Testing Basic Agents\n');
 
 async function testGroq() {
-  console.log('1️⃣  Testing Groq (llama3-70b-8192)...');
+  console.log('1️⃣  Testing Groq (llama-3.3-70b-versatile)...');
   try {
+    if (!process.env.GROQ_API_KEY) {
+      console.log('⚠️  Groq API key not found, skipping...');
+      return;
+    }
+
     const agent = createAgent({
       provider: 'openai',
-      model: 'llama3-70b-8192',
+      model: 'llama-3.3-70b-versatile',
       apiKey: process.env.GROQ_API_KEY,
       baseURL: 'https://api.groq.com/openai/v1'
     });
@@ -25,11 +30,16 @@ async function testGroq() {
 }
 
 async function testGemini() {
-  console.log('2️⃣  Testing Gemini (gemini-2.0-flash-exp)...');
+  console.log('2️⃣  Testing Gemini (gemini-1.5-pro)...');
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      console.log('⚠️  Gemini API key not found, skipping...');
+      return;
+    }
+
     const agent = createAgent({
       provider: 'gemini',
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-1.5-pro',
       apiKey: process.env.GEMINI_API_KEY
     });
 
@@ -42,7 +52,7 @@ async function testGemini() {
 }
 
 async function testOpenAI() {
-  console.log('3️⃣  Testing OpenAI (gpt-4-turbo-preview)...');
+  console.log('3️⃣  Testing OpenAI (gpt-4o-mini)...');
   try {
     if (!process.env.OPENAI_API_KEY) {
       console.log('⚠️  OpenAI API key not found, skipping...');
@@ -51,7 +61,7 @@ async function testOpenAI() {
 
     const agent = createAgent({
       provider: 'openai',
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-4o-mini',
       apiKey: process.env.OPENAI_API_KEY
     });
 

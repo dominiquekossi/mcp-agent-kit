@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-> 🔒 Esta é uma branch de testes que usa o pacote `mcp-agent-kit` do npm, não o código fonte local.
+> 🔒 Esta é uma branch de testes que usa o pacote `mcp-agent-kit` v1.1.3 do npm, não o código fonte local.
 
 ## 🚀 Setup Rápido (5 minutos)
 

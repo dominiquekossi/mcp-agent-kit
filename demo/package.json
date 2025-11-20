@@ -17,9 +17,9 @@
     "verify": "npm run check:version && npm run test:all"
   },
   "dependencies": {
-    "mcp-agent-kit": "^1.1.0",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "dotenv": "^16.3.1"
+    "mcp-agent-kit": "^1.1.3"
   },
   "engines": {
     "node": ">=18.0.0"

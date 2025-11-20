@@ -2,16 +2,24 @@
 
 > 🔒 **Branch Privada de Testes** - Simula um usuário externo usando o pacote via npm
 
-Demo API para testar todas as funcionalidades do `mcp-agent-kit` instalado diretamente do npm.
+Demo API para testar todas as funcionalidades do `mcp-agent-kit` v1.1.3 instalado diretamente do npm.
 
 ## ⚠️ Importante
 
 Esta branch **NÃO** usa o código fonte local. Ela instala o pacote `mcp-agent-kit` do npm como um usuário externo faria, garantindo que:
 
-- ✅ O pacote publicado funciona corretamente
+- ✅ O pacote publicado funciona corretamente (v1.1.3)
 - ✅ Todas as features estão acessíveis
 - ✅ A documentação está correta
 - ✅ Não há dependências quebradas
+
+## 📦 Versão Atual
+
+**mcp-agent-kit v1.1.3** - Testado e validado ✅
+
+- Smart Tool Calling (retry, timeout, cache)
+- ESM/CommonJS compatibility
+- All tests passing
 
 ## Estrutura
 
@@ -65,7 +73,7 @@ Sempre que uma nova versão for publicada no npm:
 - [x] OpenAI (gpt-4-turbo-preview)
 - [x] Anthropic (claude-3-5-sonnet)
 
-### ✅ Smart Tool Calling (v1.1.0)
+### ✅ Smart Tool Calling (v1.1.3)
 
 - [x] Retry automático
 - [x] Timeout
