@@ -19,6 +19,7 @@ test-*.js
 .kiro/
 docs/
 examples/*.ts
+demo/
 
 # Build files
 tsconfig.json

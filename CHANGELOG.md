@@ -149,6 +149,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `ERR_REQUIRE_ESM` error when importing from npm
 - All tests passing (32 tests, 4 suites)
 
+## [1.1.2] - 2024-11-20
+
+### Fixed
+
+- **Package Size**: Excluded demo folder from npm package (reduced from 3.7MB to ~54KB)
+- Updated .npmignore to prevent demo files from being published
+
 ## [Unreleased]
 
 ### Planned Features
@@ -163,6 +170,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.1.2]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.1.2
 [1.1.1]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.1.1
 [1.1.0]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.1.0
 [1.0.0]: https://github.com/dominiquekossi/mcp-agent-kit/releases/tag/v1.0.0
