@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      # The README is the first thing a new user runs. Compiling every example
+      # is what keeps a broken Quick Start from reaching npm again.
+      - name: Check README examples
+        run: npm run check:readme
+
+      - name: Check examples compile
+        run: npm run check:examples
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+
+      - run: npm ci
+
+      # Verify the published tarball actually imports: dist present, entry
+      # point resolvable, and the public API exported.
+      - name: Smoke-test the package tarball
+        run: |
+          npm pack
+          mkdir -p /tmp/smoke && cd /tmp/smoke
+          npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE"/mcp-agent-kit-*.tgz
+          node -e "
+            const kit = require('mcp-agent-kit');
+            const expected = ['createAgent','createMCPServer','createLLMRouter','createChatbot','connectMCP','api'];
+            const missing = expected.filter((name) => typeof kit[name] === 'undefined');
+            if (missing.length) {
+              console.error('Missing exports:', missing.join(', '));
+              process.exit(1);
+            }
+            console.log('Package exports OK:', expected.join(', '));
+          "
+
+      # The CLI is a published entry point: check the bin resolves and runs.
+      - name: Smoke-test the CLI
+        run: |
+          cd /tmp/smoke
+          npx mcp-agent-kit --version
+          npx mcp-agent-kit inspect --help
+          npx mcp-agent-kit inspect --json --timeout 60000 \
+            npx -y @modelcontextprotocol/server-filesystem . > report.json
+          node -e "
+            const r = require('./report.json');
+            if (!r.connected) { console.error('inspect could not connect'); process.exit(1); }
+            if (!r.tools.length) { console.error('inspect found no tools'); process.exit(1); }
+            console.log('inspect OK:', r.tools.length, 'tools,', r.summary.errors, 'errors');
+          "

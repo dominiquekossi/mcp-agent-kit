@@ -2,10 +2,10 @@
  * Example: Creating an MCP Server with tools and resources
  */
 
-import { createMCPServer } from '../src';
+import { createMCPServer, MCPServerConfig } from '../src';
 
 // Create MCP server with tools and resources
-const server = createMCPServer({
+const config: MCPServerConfig = {
   name: 'example-mcp-server',
   logLevel: 'debug',
   
@@ -105,13 +105,16 @@ const server = createMCPServer({
       },
     },
   ],
-});
+};
 
 // Start the server
 async function main() {
   try {
     console.log('🚀 Starting MCP Server...\n');
-    
+
+    // createMCPServer is async: it loads the MCP SDK before building the server
+    const server = await createMCPServer(config);
+
     await server.start();
     
     console.log('\n✅ Server is running!');

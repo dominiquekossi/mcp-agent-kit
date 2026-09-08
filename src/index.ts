@@ -16,6 +16,22 @@ export { createAgent, Agent } from './agent/createAgent';
 // MCP Server
 export { createMCPServer, MCPServer } from './mcp/createServer';
 
+// MCP Orchestrator (client side: connect to and aggregate MCP servers)
+export {
+  connectMCP,
+  MCPOrchestrator,
+  matchesPattern,
+} from './mcp/client/connectMCP';
+export type {
+  ConnectMCPConfig,
+  MCPServerSpec,
+  MCPStdioServer,
+  MCPHttpServer,
+  MCPServerStatus,
+  MCPServerState,
+  MCPCallRecord,
+} from './mcp/client/types';
+
 // Router
 export { createLLMRouter, LLMRouter } from './router/createLLMRouter';
 

@@ -28,6 +28,8 @@ export interface MCPResource {
 export interface MCPServerConfig {
   name?: string;
   port?: number;
+  /** HTTP path MCP is served at when using the http transport. Default: /mcp */
+  path?: string;
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
   tools?: MCPTool[];
   resources?: MCPResource[];
@@ -39,6 +41,11 @@ export interface MCPServerConfig {
 
 export type LLMProvider = 'openai' | 'anthropic' | 'gemini' | 'ollama';
 
+export interface ToolContext {
+  /** Aborted when the tool exceeds `toolTimeout`, so handlers can stop early */
+  signal: AbortSignal;
+}
+
 export interface AgentTool {
   name: string;
   description: string;
@@ -47,7 +54,7 @@ export interface AgentTool {
     properties: Record<string, any>;
     required?: string[];
   };
-  handler: (params: any) => Promise<any>;
+  handler: (params: any, context?: ToolContext) => Promise<any>;
 }
 
 // ============================================================================
@@ -71,6 +78,14 @@ export interface SmartToolConfig {
   };
   /** Enable debug logging for tool calls */
   debug?: boolean;
+  /**
+   * Run requested tools automatically inside chat() and feed the results back
+   * to the model until it answers. Set to false to get the raw tool calls back
+   * and run them yourself. Default: true.
+   */
+  autoExecuteTools?: boolean;
+  /** Maximum model round-trips in one chat() call. Default: 5 */
+  maxIterations?: number;
 }
 
 export interface AgentConfig {
@@ -85,19 +100,44 @@ export interface AgentConfig {
   toolConfig?: SmartToolConfig;
 }
 
+export interface ToolCall {
+  /** Provider-issued id, used to correlate a result with its call */
+  id: string;
+  name: string;
+  arguments: any;
+}
+
+export interface ToolResult {
+  toolCallId: string;
+  name: string;
+  /** Result returned by the tool handler, or the error message when it failed */
+  result: any;
+  isError?: boolean;
+}
+
 export interface AgentMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   name?: string;
+  /** Tool calls requested by the assistant on this turn */
+  toolCalls?: ToolCall[];
+  /** Set on a `tool` message: which call this message answers */
+  toolCallId?: string;
+  /** @deprecated use `toolCalls` */
   tool_calls?: any[];
 }
 
 export interface AgentResponse {
   content: string;
   toolCalls?: Array<{
+    id?: string;
     name: string;
     arguments: any;
   }>;
+  /** Tools executed while producing this response, in call order */
+  toolResults?: ToolResult[];
+  /** Number of model round-trips taken (1 when no tool was called) */
+  iterations?: number;
   usage?: {
     promptTokens: number;
     completionTokens: number;

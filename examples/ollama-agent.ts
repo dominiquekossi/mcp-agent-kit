@@ -2,7 +2,7 @@
  * Example: Using Ollama (Local LLM) Provider
  */
 
-import { createAgent } from '../src';
+import { createAgent, AgentMessage } from '../src';
 
 async function main() {
   console.log('🤖 Ollama (Local LLM) Agent Example\n');
@@ -62,16 +62,16 @@ async function main() {
   // Example 3: Conversation
   console.log('📝 Example 3: Multi-turn Conversation\n');
   try {
-    const messages = [
-      { role: 'user' as const, content: 'Hi, I am learning JavaScript' },
+    const messages: AgentMessage[] = [
+      { role: 'user', content: 'Hi, I am learning JavaScript' },
     ];
 
     const response3a = await agent.chat(messages);
     console.log('Bot:', response3a.content);
 
     messages.push(
-      { role: 'assistant' as const, content: response3a.content },
-      { role: 'user' as const, content: 'Can you explain what a closure is?' }
+      { role: 'assistant', content: response3a.content },
+      { role: 'user', content: 'Can you explain what a closure is?' }
     );
 
     const response3b = await agent.chat(messages);

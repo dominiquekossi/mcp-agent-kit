@@ -17,47 +17,64 @@ export class GeminiProvider {
 
   async chat(messages: AgentMessage[]): Promise<AgentResponse> {
     try {
-      const model = this.config.model || "gemini-2.0-flash-exp";
+      const model = this.config.model || "gemini-2.0-flash";
 
       logger.debug(`Gemini: Calling ${model}`);
 
-      // Get the generative model
+      const systemMessage = messages.find((m) => m.role === "system");
+      const systemInstruction = systemMessage?.content || this.config.system;
+
       const genModel = this.client.getGenerativeModel({
         model,
         generationConfig: {
           temperature: this.config.temperature ?? 0.7,
           maxOutputTokens: this.config.maxTokens,
         },
-      });
+        // Tools have to be declared on the model, otherwise Gemini never emits
+        // a functionCall no matter what the prompt asks for.
+        ...(this.config.tools?.length
+          ? {
+              tools: [
+                {
+                  functionDeclarations: this.config.tools.map((tool) => ({
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: tool.parameters,
+                  })),
+                },
+              ],
+            }
+          : {}),
+        ...(systemInstruction ? ({ systemInstruction } as any) : {}),
+      } as any);
 
-      // Convert messages to Gemini format
-      const { systemInstruction, history, currentMessage } =
-        this.convertMessages(messages);
+      const result = await genModel.generateContent({
+        contents: this.convertMessages(
+          messages.filter((m) => m.role !== "system")
+        ),
+      } as any);
 
-      // Start chat with history
-      const chat = genModel.startChat({
-        history,
-        ...(systemInstruction && ({ systemInstruction } as any)),
-      });
-
-      // Send message
-      const result = await chat.sendMessage(currentMessage);
       const response = result.response;
       const text = response.text();
 
-      // Handle function calls if tools are configured
+      // Handle function calls
       let toolCalls: any[] | undefined;
-      const functionCalls = (response as any).functionCalls?.();
+      const functionCalls =
+        typeof (response as any).functionCalls === "function"
+          ? (response as any).functionCalls()
+          : undefined;
 
       if (functionCalls && functionCalls.length > 0) {
-        toolCalls = functionCalls.map((fc: any) => ({
+        toolCalls = functionCalls.map((fc: any, index: number) => ({
+          // Gemini does not issue call ids; synthesize a stable one so the
+          // agent loop can pair each result with its call.
+          id: `gemini-${Date.now()}-${index}`,
           name: fc.name,
           arguments: fc.args,
         }));
       }
 
-      // Get usage metadata
-      const usageMetadata = (result.response as any).usageMetadata;
+      const usageMetadata = (response as any).usageMetadata;
 
       return {
         content: text,
@@ -74,31 +91,64 @@ export class GeminiProvider {
     }
   }
 
-  private convertMessages(messages: AgentMessage[]): {
-    systemInstruction?: string;
-    history: any[];
-    currentMessage: string;
-  } {
-    // Extract system message
-    const systemMessage = messages.find((m) => m.role === "system");
-    const systemInstruction = systemMessage?.content || this.config.system;
+  /**
+   * Convert the neutral message format into Gemini `contents`, mapping tool
+   * calls to functionCall parts and tool results to functionResponse parts.
+   */
+  private convertMessages(messages: AgentMessage[]): any[] {
+    const contents: any[] = [];
 
-    // Filter out system messages
-    const chatMessages = messages.filter((m) => m.role !== "system");
+    for (const msg of messages) {
+      if (msg.role === "tool") {
+        contents.push({
+          role: "user",
+          parts: [
+            {
+              functionResponse: {
+                name: msg.name || "tool",
+                response: this.parseResult(msg.content),
+              },
+            },
+          ],
+        });
+        continue;
+      }
 
-    // Last message is the current one
-    const currentMessage = chatMessages[chatMessages.length - 1]?.content || "";
+      if (msg.role === "assistant" && msg.toolCalls?.length) {
+        const parts: any[] = [];
 
-    // Convert previous messages to history
-    const history = chatMessages.slice(0, -1).map((msg) => ({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }],
-    }));
+        if (msg.content) {
+          parts.push({ text: msg.content });
+        }
 
-    return {
-      systemInstruction,
-      history,
-      currentMessage,
-    };
+        for (const call of msg.toolCalls) {
+          parts.push({
+            functionCall: { name: call.name, args: call.arguments ?? {} },
+          });
+        }
+
+        contents.push({ role: "model", parts });
+        continue;
+      }
+
+      contents.push({
+        role: msg.role === "assistant" ? "model" : "user",
+        parts: [{ text: msg.content }],
+      });
+    }
+
+    return contents;
+  }
+
+  /** Gemini expects a JSON object as the function response payload. */
+  private parseResult(content: string): any {
+    try {
+      const parsed = JSON.parse(content);
+      return typeof parsed === "object" && parsed !== null
+        ? parsed
+        : { result: parsed };
+    } catch {
+      return { result: content };
+    }
   }
 }

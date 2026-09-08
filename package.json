@@ -1,7 +1,7 @@
 {
   "name": "mcp-agent-kit",
-  "version": "1.1.3",
-  "description": "The easiest way to create MCP servers, AI agents, and chatbots with any LLM",
+  "version": "1.2.0",
+  "description": "Orchestrate MCP servers and build AI agents in TypeScript — connect to many MCP servers, aggregate their tools, and run them in your app",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -9,17 +9,24 @@
     "build": "tsc",
     "build:clean": "rm -rf dist && npm run build",
     "test": "jest",
-    "test:core": "node test-core.js",
     "prepublishOnly": "npm run build",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "check:readme": "node scripts/check-readme.mjs",
+    "check:examples": "tsc -p tsconfig.examples.json",
+    "verify": "npm run build && npm test && npm run check:readme && npm run check:examples"
   },
   "keywords": [
     "mcp",
     "model-context-protocol",
+    "mcp-client",
+    "mcp-server",
+    "mcp-orchestrator",
+    "mcp-gateway",
     "ai",
     "agent",
+    "ai-agent",
     "llm",
     "openai",
     "anthropic",
@@ -29,13 +36,12 @@
     "chatbot",
     "orchestrator",
     "typescript",
-    "gpt-4",
-    "gpt-3.5",
-    "claude-3",
     "function-calling",
+    "tool-calling",
     "tools",
     "router",
-    "multi-llm"
+    "multi-llm",
+    "streamable-http"
   ],
   "author": "dominiquekossi <houessoudominique@gmail.com>",
   "license": "MIT",
@@ -50,7 +56,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.69.0",
     "@google/generative-ai": "^0.1.3",
-    "@modelcontextprotocol/sdk": "^0.5.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "axios": "^1.6.2",
     "dotenv": "^16.3.1",
     "openai": "^4.20.0",
@@ -71,5 +77,14 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "mcp-agent-kit": "dist/cli/index.js"
   }
 }

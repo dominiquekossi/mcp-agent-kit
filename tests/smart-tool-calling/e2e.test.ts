@@ -389,8 +389,12 @@ describe("Smart Tool Calling E2E", () => {
         name: "slow_tool",
         description: "Takes too long",
         parameters: { type: "object", properties: {} },
-        handler: async () => {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+        handler: async (_params: any, ctx?: any) => {
+          await new Promise((resolve) => {
+            const timer = setTimeout(resolve, 2000);
+            // Release the pending work as soon as the timeout aborts the call.
+            ctx?.signal.addEventListener("abort", () => clearTimeout(timer));
+          });
           return { result: "done" };
         },
       };

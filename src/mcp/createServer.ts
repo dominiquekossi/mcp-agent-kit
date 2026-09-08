@@ -2,14 +2,18 @@
  * MCP Server - Create a complete MCP server with one function
  */
 
+import { createServer as createHttpServer, Server as HttpServer } from "http";
 import { MCPServerConfig, MCPTool, MCPResource } from "../types";
 import { getEnv } from "../core/env";
 import { logger, createLogger, Logger } from "../core/logger";
-import { WebSocketTransport } from "./transport";
+
+/** Transports a server can be started on. */
+export type MCPTransportKind = "stdio" | "http";
 
 // Dynamic imports for ESM modules
 let Server: any;
 let StdioServerTransport: any;
+let StreamableHTTPServerTransport: any;
 let CallToolRequestSchema: any;
 let ListToolsRequestSchema: any;
 let ListResourcesRequestSchema: any;
@@ -27,6 +31,11 @@ async function loadMCPSDK() {
     );
     StdioServerTransport = stdioModule.StdioServerTransport;
 
+    const httpModule = await import(
+      "@modelcontextprotocol/sdk/server/streamableHttp.js"
+    );
+    StreamableHTTPServerTransport = httpModule.StreamableHTTPServerTransport;
+
     const typesModule = await import("@modelcontextprotocol/sdk/types.js");
     CallToolRequestSchema = typesModule.CallToolRequestSchema;
     ListToolsRequestSchema = typesModule.ListToolsRequestSchema;
@@ -42,8 +51,8 @@ export class MCPServer {
   private resources: Map<string, MCPResource>;
   private logger: Logger;
   private isRunning: boolean = false;
-  private wsTransport: WebSocketTransport | null = null;
-  private transportType: "stdio" | "websocket" = "stdio";
+  private httpServer: HttpServer | null = null;
+  private transportType: MCPTransportKind = "stdio";
   private initialized: boolean = false;
 
   private constructor(config: MCPServerConfig = {}) {
@@ -52,6 +61,7 @@ export class MCPServer {
     this.config = {
       name: config.name || env.mcpServerName,
       port: config.port || env.mcpPort,
+      path: config.path || '/mcp',
       logLevel: config.logLevel || env.logLevel,
       tools: config.tools || [],
       resources: config.resources || [],
@@ -74,9 +84,23 @@ export class MCPServer {
     await loadMCPSDK();
     const instance = new MCPServer(config);
 
-    instance.server = new Server(
+    instance.server = instance.buildServer();
+    instance.initialized = true;
+    instance.logger.info(`MCP Server initialized: ${instance.config.name}`);
+    return instance;
+  }
+
+  /**
+   * Build a protocol server with this instance's tools and resources.
+   *
+   * Stateless HTTP needs a fresh server and transport per request — a single
+   * transport can only serve one exchange — so this is called per request
+   * there, and once at startup for stdio.
+   */
+  private buildServer(): any {
+    const server = new Server(
       {
-        name: instance.config.name!,
+        name: this.config.name!,
         version: "1.0.0",
       },
       {
@@ -87,14 +111,14 @@ export class MCPServer {
       }
     );
 
-    instance.setupHandlers();
-    instance.initialized = true;
-    instance.logger.info(`MCP Server initialized: ${instance.config.name}`);
-    return instance;
+    this.setupHandlers(server);
+    return server;
   }
 
-  private setupHandlers(): void {
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+  private setupHandlers(target: any): void {
+    const server = target;
+
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
       this.logger.debug("Listing tools");
       return {
         tools: Array.from(this.tools.values()).map((tool) => ({
@@ -105,7 +129,7 @@ export class MCPServer {
       };
     });
 
-    this.server.setRequestHandler(
+    server.setRequestHandler(
       CallToolRequestSchema,
       async (request: any) => {
         const { name, arguments: args } = request.params;
@@ -137,7 +161,7 @@ export class MCPServer {
       }
     );
 
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    server.setRequestHandler(ListResourcesRequestSchema, async () => {
       this.logger.debug("Listing resources");
       return {
         resources: Array.from(this.resources.values()).map((resource) => ({
@@ -149,7 +173,7 @@ export class MCPServer {
       };
     });
 
-    this.server.setRequestHandler(
+    server.setRequestHandler(
       ReadResourceRequestSchema,
       async (request: any) => {
         const { uri } = request.params;
@@ -181,6 +205,101 @@ export class MCPServer {
     );
   }
 
+  /**
+   * Serve MCP over Streamable HTTP — the transport current MCP clients speak.
+   * Runs stateless: each request carries everything the server needs.
+   */
+  private async startHttp(): Promise<void> {
+    const port = this.config.port!;
+    const path = this.config.path || "/mcp";
+
+    this.logger.info(
+      `Starting MCP Server on Streamable HTTP (port ${port}, path ${path})...`
+    );
+
+    this.httpServer = createHttpServer((req, res) => {
+      void this.handleHttpRequest(path, req, res);
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      const onError = (error: Error) => reject(error);
+      this.httpServer!.once("error", onError);
+      this.httpServer!.listen(port, () => {
+        this.httpServer!.off("error", onError);
+        resolve();
+      });
+    });
+  }
+
+  private async handleHttpRequest(
+    path: string,
+    req: any,
+    res: any
+  ): Promise<void> {
+    let server: any;
+    let transport: any;
+
+    try {
+      const url = new URL(
+        req.url || "/",
+        `http://${req.headers.host || "localhost"}`
+      );
+
+      if (url.pathname !== path) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: `Not found. MCP is served at ${path}` }));
+        return;
+      }
+
+      const body = req.method === "POST" ? await this.readJsonBody(req) : undefined;
+
+      // Stateless mode: one server and transport per request. Reusing a single
+      // transport across requests makes the second exchange fail with a 500.
+      server = this.buildServer();
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+      });
+
+      res.on("close", () => {
+        void transport?.close();
+        void server?.close();
+      });
+
+      await server.connect(transport);
+      await transport.handleRequest(req, res, body);
+    } catch (error: any) {
+      this.logger.error("HTTP request failed:", error.message);
+
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    }
+  }
+
+  private readJsonBody(req: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+
+      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("error", reject);
+      req.on("end", () => {
+        const raw = Buffer.concat(chunks).toString("utf8");
+
+        if (!raw) {
+          resolve(undefined);
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(raw));
+        } catch {
+          reject(new Error("Request body is not valid JSON"));
+        }
+      });
+    });
+  }
+
   registerTool(tool: MCPTool): void {
     this.logger.debug(`Registering tool: ${tool.name}`);
     this.tools.set(tool.name, tool);
@@ -191,24 +310,28 @@ export class MCPServer {
     this.resources.set(resource.uri, resource);
   }
 
-  async start(transport?: "stdio" | "websocket"): Promise<void> {
+  async start(transport?: MCPTransportKind | "websocket"): Promise<void> {
     if (this.isRunning) {
       this.logger.warn("Server is already running");
       return;
     }
 
+    if (transport === "websocket") {
+      // The old WebSocket transport accepted connections but was never wired to
+      // the MCP server, so it answered nothing. Streamable HTTP is the current
+      // standard transport and is implemented below.
+      throw new Error(
+        'The "websocket" transport was removed in v1.2.0: it accepted ' +
+          "connections without ever answering MCP requests. Use " +
+          'start("http") for Streamable HTTP, or start() for stdio.'
+      );
+    }
+
     this.transportType = transport || "stdio";
 
     try {
-      if (this.transportType === "websocket") {
-        this.logger.info(
-          `Starting MCP Server on WebSocket (port ${this.config.port})...`
-        );
-        this.wsTransport = new WebSocketTransport(
-          { port: this.config.port! },
-          this.logger
-        );
-        await this.wsTransport.start();
+      if (this.transportType === "http") {
+        await this.startHttp();
       } else {
         this.logger.info(`Starting MCP Server on stdio transport...`);
         const stdioTransport = new StdioServerTransport();
@@ -236,9 +359,13 @@ export class MCPServer {
     try {
       this.logger.info("Stopping MCP Server...");
 
-      if (this.wsTransport) {
-        await this.wsTransport.stop();
-        this.wsTransport = null;
+      if (this.httpServer) {
+        await new Promise<void>((resolve) => {
+          this.httpServer!.close(() => resolve());
+          // Sockets kept alive by clients would otherwise hold close() open.
+          this.httpServer!.closeAllConnections?.();
+        });
+        this.httpServer = null;
       }
 
       await this.server.close();
@@ -254,18 +381,24 @@ export class MCPServer {
     running: boolean;
     tools: number;
     resources: number;
-    transport: string;
-    clients?: number;
+    transport: MCPTransportKind;
+    url?: string;
   } {
-    const status: any = {
+    const status: {
+      running: boolean;
+      tools: number;
+      resources: number;
+      transport: MCPTransportKind;
+      url?: string;
+    } = {
       running: this.isRunning,
       tools: this.tools.size,
       resources: this.resources.size,
       transport: this.transportType,
     };
 
-    if (this.wsTransport) {
-      status.clients = this.wsTransport.getStatus().clients;
+    if (this.transportType === "http" && this.isRunning) {
+      status.url = `http://localhost:${this.config.port}${this.config.path || "/mcp"}`;
     }
 
     return status;
