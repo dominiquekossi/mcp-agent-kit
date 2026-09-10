@@ -6,12 +6,43 @@ export interface CacheConfig {
   enabled: boolean;
   ttl: number;
   maxSize: number;
+  debug?: boolean;
 }
 
 interface CacheEntry<T = any> {
   value: T;
   timestamp: number;
   hits: number;
+}
+
+/**
+ * Serialize any value to a stable string: object keys are sorted at every
+ * depth, so two structurally equal params always produce the same string and
+ * two different ones never collide. Handles null, primitives and arrays.
+ */
+function stableStringify(value: any): string {
+  if (value === undefined) {
+    return 'undefined';
+  }
+
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value) ?? 'null';
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+
+  if (value instanceof Date) {
+    return JSON.stringify(value.toISOString());
+  }
+
+  const keys = Object.keys(value).sort();
+  const body = keys
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(',');
+
+  return `{${body}}`;
 }
 
 /**
@@ -121,12 +152,16 @@ export class ToolCache {
   }
 
   /**
-   * Generate cache key from tool name and parameters
+   * Generate cache key from tool name and parameters.
+   *
+   * Uses a recursive stable serialization so that key ordering never affects
+   * the key, and nested values are always part of it. Passing the sorted keys
+   * as the second argument of JSON.stringify would treat them as a replacer
+   * list, which strips nested properties at every level and makes different
+   * calls collide on the same entry.
    */
   static generateKey(toolName: string, params: any): string {
-    // Create a stable string representation of params
-    const paramsStr = JSON.stringify(params, Object.keys(params).sort());
-    return `${toolName}:${paramsStr}`;
+    return `${toolName}:${stableStringify(params)}`;
   }
 
   /**
@@ -157,6 +192,12 @@ export class ToolCache {
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
     }, 60000);
+
+    // Never hold the event loop open just for cache cleanup: a CLI that
+    // creates an agent should still be able to exit on its own.
+    if (typeof this.cleanupInterval.unref === 'function') {
+      this.cleanupInterval.unref();
+    }
 
     // Ensure cleanup runs on process exit
     if (typeof process !== "undefined") {
@@ -194,7 +235,7 @@ export class ToolCache {
       this.cache.delete(key);
     }
 
-    if (keysToDelete.length > 0) {
+    if (keysToDelete.length > 0 && this.config.debug) {
       console.log(
         `[ToolCache] Cleaned up ${keysToDelete.length} expired entries`
       );

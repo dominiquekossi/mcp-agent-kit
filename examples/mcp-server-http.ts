@@ -1,11 +1,11 @@
 /**
- * Example: MCP Server with WebSocket transport
+ * Example: MCP Server over Streamable HTTP
  */
 
-import { createMCPServer } from '../src';
+import { createMCPServer, MCPServerConfig } from '../src';
 
-const server = createMCPServer({
-  name: 'websocket-mcp-server',
+const config: MCPServerConfig = {
+  name: 'http-mcp-server',
   port: 8080,
   logLevel: 'debug',
   
@@ -56,20 +56,23 @@ const server = createMCPServer({
       },
     },
   ],
-});
+};
 
 async function main() {
   try {
-    console.log('🚀 Starting MCP Server with WebSocket transport...\n');
-    
-    // Start with WebSocket transport
-    await server.start('websocket');
+    console.log('🚀 Starting MCP Server over Streamable HTTP...\n');
+
+    // createMCPServer is async: it loads the MCP SDK before building the server
+    const server = await createMCPServer(config);
+
+    // Start on Streamable HTTP — the transport current MCP clients speak
+    await server.start('http');
     
     const status = server.getStatus();
     console.log('\n✅ Server is running!');
     console.log('📊 Status:', status);
-    console.log('\n💡 WebSocket server listening on ws://localhost:8080');
-    console.log('💡 Connect using an MCP client via WebSocket\n');
+    console.log('\n💡 MCP endpoint: http://localhost:8080/mcp');
+    console.log('💡 Point any MCP client at that URL, or use connectMCP()\n');
     
     // Keep running
     process.on('SIGINT', async () => {

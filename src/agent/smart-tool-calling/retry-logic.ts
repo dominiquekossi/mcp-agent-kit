@@ -120,8 +120,13 @@ export class RetryLogic {
         });
       });
 
-      // Race between tool execution and timeout
-      const result = await Promise.race([tool.handler(params), timeoutPromise]);
+      // Race between tool execution and timeout. The signal is handed to the
+      // handler as a second argument so long-running tools can cancel their own
+      // work when the timeout fires — a promise cannot be aborted from outside.
+      const result = await Promise.race([
+        tool.handler(params, { signal: controller.signal }),
+        timeoutPromise,
+      ]);
 
       return result as T;
     } finally {

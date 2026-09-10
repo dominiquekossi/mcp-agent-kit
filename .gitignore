@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
-package-lock.json
+# package-lock.json is committed: CI uses `npm ci`, which requires it, and it
+# keeps builds reproducible. It does not affect consumers of the package.
 
 # Build
 dist/

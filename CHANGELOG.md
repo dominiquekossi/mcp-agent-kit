@@ -5,6 +5,115 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-07
+
+The headline is the MCP orchestrator. Everything before it is a correctness
+release: three of the defects fixed here made documented features not work at
+all.
+
+### Added
+
+#### `inspect` CLI
+
+- `npx mcp-agent-kit inspect <command|url>` — connect to any MCP server, list
+  its tools and resources, validate the schemas and time the round-trips.
+  Usable without adopting the library
+- Schema validation that catches what real clients reject: tool names outside
+  `[a-zA-Z0-9_-]{1,64}` (OpenAI and Anthropic refuse them), `required` keys with
+  no matching property, missing or non-object `inputSchema`, duplicate names.
+  Missing descriptions are reported as warnings
+- `--call <tool>` with `--args` to exercise a tool and measure its latency
+- `--json` for CI, with meaningful exit codes: `0` clean, `1` schema errors,
+  `2` could not connect
+- `--header` for authenticated HTTP servers, `--env` for stdio servers
+- A stdio server's stderr is captured and shown only when the connection
+  fails — so its logs explain the failure instead of polluting the report
+
+#### MCP Orchestrator (the client side of MCP)
+
+- `connectMCP({ servers })` — connect to several MCP servers at once over
+  stdio and Streamable HTTP, in parallel
+- Tool aggregation with per-server namespacing (`github__create_issue`), so two
+  servers can expose the same tool name without colliding
+- Tool filtering with `allowTools` / `denyTools` globs, per server (bare names)
+  and globally (namespaced names) — keeps dozens of tools from bloating the
+  prompt and degrading model choices
+- Fault isolation: a server that fails to connect degrades the tool set instead
+  of failing the agent. `strict: true` opts into all-or-nothing
+- Automatic reconnect-and-retry once when a connection drops mid-call
+- `agent.use(mcp)` to hand every MCP tool to an agent in one call
+- Observability: `getStats()`, `getCallLog()` with per-call server, duration and
+  outcome; `listServers()` for connection state
+- `getRawTools()`, `listResources()`, `getConnectTime()` and `getServerLogs()`
+  for inspecting what a server publishes
+- Per-server and per-call timeouts
+
+#### Agent
+
+- `registerTools()` and `listTools()` to add and inspect tools on a live agent
+- `toolConfig.autoExecuteTools` (default `true`) and `toolConfig.maxIterations`
+  (default `5`)
+- `AgentResponse.toolResults` and `AgentResponse.iterations`; `usage` is now
+  summed across every round-trip
+- Tool handlers receive an `AbortSignal` as a second argument, so a handler can
+  cancel its own work when `toolTimeout` fires
+
+#### MCP Server
+
+- Streamable HTTP transport: `server.start("http")`, served at a configurable
+  `path` (default `/mcp`)
+
+#### Tooling
+
+- `npm run check:readme` compiles every TypeScript block in README.md
+- `npm run check:examples` type-checks `examples/`
+- GitHub Actions CI: build, tests, doc checks and a package tarball smoke test
+  across Node 18/20/22
+
+### Fixed
+
+- **Tools are now actually executed.** `agent.chat()` returned the model's raw
+  tool calls and never ran a handler, so any agent with tools answered with an
+  empty string — while the README claimed tools were called automatically. The
+  agent now runs the requested tools, feeds their results back to the model and
+  returns the final answer
+- **Cache no longer returns another call's result.** `ToolCache.generateKey`
+  passed sorted keys as `JSON.stringify`'s replacer, which strips nested
+  properties at every level: any two calls with nested params produced the same
+  key and the cache served the wrong value, silently. Keys are now built with a
+  recursive stable serialization, and `null`/primitive params no longer throw
+- **README examples run.** `createMCPServer` became async in v1.1.3 but the docs
+  and examples kept calling it synchronously, so the Quick Start threw
+  `TypeError: server.start is not a function`. Fixed, and CI now compiles every
+  example on the page
+- **`forceToolUse` and `onToolNotCalled` now do something.** Both were
+  documented with defaults, but `PromptEnhancer` — the class implementing them —
+  was never called from anywhere. It is now wired into the tool loop with
+  progressive prompt escalation
+- Anthropic provider read only `content[0]`, losing the text whenever a tool_use
+  block came first; it now concatenates every text block
+- Anthropic provider no longer sends `temperature` unless explicitly set —
+  current Claude models reject sampling parameters with a 400
+- Gemini and Ollama providers never passed tool definitions to the model, so
+  they could never call a tool
+- Chatbot's documented return type corrected to `Promise<string>`
+- Cache cleanup timers are `unref()`'d, so a CLI can exit on its own
+- Cache cleanup no longer logs unless `debug` is set
+
+### Changed
+
+- **Removed the `websocket` transport.** It accepted connections and ran a
+  heartbeat but was never wired to the MCP server, so it answered no requests
+  while `getStatus()` reported it healthy. `start("websocket")` now throws with
+  a pointer to `start("http")`
+- Upgraded `@modelcontextprotocol/sdk` from 0.5.0 (November 2024, pre-1.0) to
+  1.30.0 — this is what makes Streamable HTTP and the orchestrator possible
+- Default models refreshed: `gpt-4o` (was `gpt-4-turbo-preview`),
+  `claude-opus-5` (was `claude-3-5-sonnet-20241022`), `gemini-2.0-flash`,
+  `llama3.1` (was `llama2`)
+- Test suite grew from 32 tests in one module to 69 across the agent loop, cache
+  keys, the orchestrator (against a real MCP server) and HTTP transport
+
 ## [1.0.0] - 2024-01-XX
 
 ### Added

@@ -85,8 +85,13 @@ describe("RetryLogic", () => {
         name: "test-tool",
         description: "Test tool",
         parameters: { type: "object", properties: {} },
-        handler: jest.fn().mockImplementation(() => {
-          return new Promise((resolve) => setTimeout(resolve, 2000));
+        handler: jest.fn().mockImplementation((_params: any, ctx: any) => {
+          return new Promise((resolve) => {
+            const timer = setTimeout(resolve, 2000);
+            // Stop the pending work when the timeout aborts the call, instead
+            // of leaving it running in the background.
+            ctx?.signal.addEventListener("abort", () => clearTimeout(timer));
+          });
         }),
       };
 
@@ -100,6 +105,31 @@ describe("RetryLogic", () => {
 
       expect(result.success).toBe(false);
       expect(result.error?.message).toContain("timeout");
+    });
+
+    it("should give the handler an abort signal", async () => {
+      let received: AbortSignal | undefined;
+
+      const mockTool: AgentTool = {
+        name: "test-tool",
+        description: "Test tool",
+        parameters: { type: "object", properties: {} },
+        handler: async (_params: any, ctx?: any) => {
+          received = ctx?.signal;
+          return "ok";
+        },
+      };
+
+      const retryLogic = new RetryLogic({
+        maxRetries: 0,
+        timeout: 1000,
+        debug: false,
+      });
+
+      await retryLogic.executeWithRetry(mockTool, {});
+
+      expect(received).toBeInstanceOf(AbortSignal);
+      expect(received!.aborted).toBe(false);
     });
   });
 });

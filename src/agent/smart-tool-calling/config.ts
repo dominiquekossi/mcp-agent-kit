@@ -18,6 +18,8 @@ export const DEFAULT_SMART_TOOL_CONFIG: Required<SmartToolConfig> = {
     maxSize: 100,
   },
   debug: false,
+  autoExecuteTools: true,
+  maxIterations: 5,
 };
 
 /**
@@ -52,6 +54,10 @@ export function mergeConfig(
 
   if (merged.cacheResults.ttl && merged.cacheResults.ttl < 0) {
     throw new Error('cache TTL must be >= 0');
+  }
+
+  if (merged.maxIterations < 1) {
+    throw new Error('maxIterations must be >= 1');
   }
 
   return merged;

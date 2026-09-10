@@ -1,27 +1,48 @@
 # mcp-agent-kit
 
-> The easiest way to create MCP servers, AI agents, and chatbots with any LLM
+> Orchestrate MCP servers and build AI agents in TypeScript — in your app, not in your infrastructure
 
 [![npm version](https://img.shields.io/npm/v/mcp-agent-kit.svg)](https://www.npmjs.com/package/mcp-agent-kit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
 
-**mcp-agent-kit** is a TypeScript package that simplifies the creation of:
+Connect your agent to several MCP servers in three lines — no gateway, no
+proxy, no container:
 
-- 🔌 **MCP Servers** (Model Context Protocol)
-- 🤖 **AI Agents** with multiple LLM providers
-- 🧠 **Intelligent Routers** for multi-LLM orchestration
+```typescript
+const mcp = await connectMCP({
+  servers: {
+    files: { command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "./"] },
+    github: { url: "https://mcp.example.com/mcp" },
+  },
+});
+
+const agent = createAgent({ provider: "openai" });
+agent.use(mcp);
+
+const answer = await agent.chat("Summarise the open issues into notes.md");
+```
+
+**mcp-agent-kit** is a TypeScript package for working with MCP from inside your
+application:
+
+- 🎛️ **MCP Orchestrator** — connect to many MCP servers, aggregate and filter their tools
+- 🔍 **`inspect` CLI** — validate any MCP server’s tools without writing code
+- 🔌 **MCP Servers** — publish your own tools over stdio or Streamable HTTP
+- 🤖 **AI Agents** with automatic tool execution across four LLM providers
+- 🧠 **Intelligent Routers** for multi-LLM routing
 - 💬 **Chatbots** with conversation memory
 - 🌐 **API Helpers** with retry and timeout
 
 ## Features
 
-- **Zero Config**: Works out of the box with smart defaults
-- **Multi-Provider**: OpenAI, Anthropic, Gemini, Ollama support
+- **In-process**: an `npm install`, not another service to deploy
+- **Tool loop included**: tools are executed and their results fed back to the model
+- **Tool filtering**: allow/deny globs keep 60 tools from bloating the prompt
+- **Fault isolation**: a server that is down degrades the tool set, not the agent
+- **Multi-Provider**: OpenAI, Anthropic, Gemini, Ollama
 - **Type-Safe**: Full TypeScript support with autocomplete
-- **Production Ready**: Built-in retry, timeout, and error handling
-- **Developer Friendly**: One-line setup for complex features
-- **Extensible**: Easy to add custom providers and middleware
+- **Verified docs**: every example on this page is compiled in CI
 
 ## Installation
 
@@ -46,7 +67,7 @@ console.log(response.content);
 ```typescript
 import { createMCPServer } from "mcp-agent-kit";
 
-const server = createMCPServer({
+const server = await createMCPServer({
   name: "my-server",
   tools: [
     {
@@ -89,6 +110,8 @@ await bot.chat("What is my name?"); // Remembers context!
 
 - [AI Agents](#ai-agents)
 - [MCP Servers](#mcp-servers)
+- [MCP Orchestrator](#mcp-orchestrator)
+- [CLI: inspect](#cli-inspect-an-mcp-server)
 - [LLM Router](#llm-router)
 - [Chatbots](#chatbots)
 - [API Requests](#api-requests)
@@ -108,7 +131,7 @@ import { createAgent } from "mcp-agent-kit";
 
 const agent = createAgent({
   provider: "openai",
-  model: "gpt-4-turbo-preview",
+  model: "gpt-4o",
   temperature: 0.7,
   maxTokens: 2000,
 });
@@ -121,10 +144,10 @@ console.log(response.content);
 
 | Provider      | Models               | API Key Required |
 | ------------- | -------------------- | ---------------- |
-| **OpenAI**    | GPT-4, GPT-3.5       | ✅ Yes           |
-| **Anthropic** | Claude 3.5, Claude 3 | ✅ Yes           |
-| **Gemini**    | Gemini 2.0+          | ✅ Yes           |
-| **Ollama**    | Local models         | ❌ No            |
+| **OpenAI**    | GPT-4o, GPT-4, o-series | ✅ Yes        |
+| **Anthropic** | Claude Opus 5, Sonnet 5 | ✅ Yes        |
+| **Gemini**    | Gemini 2.0+             | ✅ Yes        |
+| **Ollama**    | Local models            | ❌ No         |
 
 ### With Tools (Function Calling)
 
@@ -219,13 +242,15 @@ const result = await agent.executeTool("get_weather", {
 | `cacheResults.ttl`     | number  | 300000  | Cache time-to-live (ms)                                        |
 | `cacheResults.maxSize` | number  | 100     | Maximum cached results                                         |
 | `debug`                | boolean | false   | Enable debug logging                                           |
+| `autoExecuteTools`     | boolean | true    | Run requested tools and feed results back to the model         |
+| `maxIterations`        | number  | 5       | Maximum model round-trips in one `chat()` call                 |
 
 #### Complete Example
 
 ```typescript
 const agent = createAgent({
   provider: "openai",
-  model: "gpt-4-turbo-preview",
+  model: "gpt-4o",
   toolConfig: {
     forceToolUse: true,
     maxRetries: 3,
@@ -257,8 +282,14 @@ const agent = createAgent({
   ],
 });
 
-// Use in chat - tools are automatically called
+// Tools are executed automatically and their results are sent back to the
+// model, so `content` is the final answer — not an empty string with a
+// pending tool call.
 const response = await agent.chat("What's the weather in NYC?");
+
+console.log(response.content);      // "It's 72°F and sunny in New York."
+console.log(response.toolResults);  // [{ name: 'get_weather', result: {...} }]
+console.log(response.iterations);   // 2 (one call for the tool, one for the answer)
 
 // Or execute directly with retry and caching
 const result = await agent.executeTool("get_weather", {
@@ -277,7 +308,7 @@ Create Model Context Protocol servers to expose tools and resources.
 ```typescript
 import { createMCPServer } from "mcp-agent-kit";
 
-const server = createMCPServer({
+const server = await createMCPServer({
   name: "my-mcp-server",
   port: 7777,
   logLevel: "info",
@@ -289,7 +320,7 @@ await server.start(); // Starts on stdio by default
 ### With Tools
 
 ```typescript
-const server = createMCPServer({
+const server = await createMCPServer({
   name: "weather-server",
   tools: [
     {
@@ -315,7 +346,7 @@ const server = createMCPServer({
 ### With Resources
 
 ```typescript
-const server = createMCPServer({
+const server = await createMCPServer({
   name: "data-server",
   resources: [
     {
@@ -331,16 +362,220 @@ const server = createMCPServer({
 });
 ```
 
-### WebSocket Transport
+### Streamable HTTP Transport
 
 ```typescript
-const server = createMCPServer({
-  name: "ws-server",
+const server = await createMCPServer({
+  name: "http-server",
   port: 8080,
+  path: "/mcp", // default
 });
 
-await server.start("websocket"); // Use WebSocket instead of stdio
+await server.start("http"); // Serves MCP at http://localhost:8080/mcp
 ```
+
+> The `websocket` transport was removed in v1.2.0. It accepted connections but
+> was never wired to the MCP server, so it answered no requests while reporting
+> itself as healthy. Use `"http"` (Streamable HTTP) instead — it is the
+> transport current MCP clients speak.
+
+---
+
+## MCP Orchestrator
+
+`createMCPServer` publishes tools. `connectMCP` is the other half: it connects
+to MCP servers, aggregates their tools behind one namespace, and hands them to
+an agent — no gateway, no proxy, no container.
+
+### Connect to several servers
+
+```typescript
+import { connectMCP, createAgent } from "mcp-agent-kit";
+
+const mcp = await connectMCP({
+  servers: {
+    // stdio: started as a child process
+    files: {
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "./"],
+    },
+    // Streamable HTTP: a remote server
+    github: {
+      url: "https://mcp.example.com/mcp",
+      headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` },
+    },
+  },
+});
+
+const agent = createAgent({ provider: "openai" });
+agent.use(mcp); // every MCP tool is now callable by the agent
+
+const answer = await agent.chat("Summarise the open issues into notes.md");
+
+await mcp.close();
+```
+
+Tools are namespaced by server, so two servers can both expose `read` without
+colliding: `files__read`, `github__read`.
+
+### Filter the tool surface
+
+Six servers easily add up to 60 tools, which bloats the prompt and degrades the
+model's choices. Expose only what the task needs:
+
+```typescript
+const mcp = await connectMCP({
+  servers: {
+    files: { command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "./"] },
+  },
+  // Globs match the namespaced name
+  allowTools: ["files__read_*", "files__list_*"],
+  denyTools: ["*__delete_*"],
+});
+```
+
+Filters can also be set per server, against the bare tool name:
+
+```typescript
+const mcp = await connectMCP({
+  servers: {
+    files: {
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "./"],
+      denyTools: ["write_file", "move_file"],
+    },
+  },
+});
+```
+
+### A server being down does not take the agent with it
+
+By default a failed server degrades the tool set and the rest keep working:
+
+```typescript
+const mcp = await connectMCP({
+  servers: {
+    good: { command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "./"] },
+    flaky: { url: "https://might-be-down.example.com/mcp" },
+  },
+});
+
+console.log(mcp.listServers());
+// [{ name: 'good',  state: 'connected', tools: 12, toolsAvailable: 12 },
+//  { name: 'flaky', state: 'failed', error: 'fetch failed', tools: 0 }]
+```
+
+Pass `strict: true` to fail the whole connection instead.
+
+### Observability
+
+```typescript
+console.log(mcp.getStats());
+// { servers: 2, connected: 1, failed: 1, tools: 12,
+//   calls: 4, failedCalls: 0, avgDurationMs: 37 }
+
+console.log(mcp.getCallLog());
+// [{ server: 'good', tool: 'read_file', durationMs: 12, ok: true }, ...]
+```
+
+### Orchestrator options
+
+| Option               | Type    | Default | Description                                              |
+| -------------------- | ------- | ------- | -------------------------------------------------------- |
+| `servers`            | object  | —       | Servers to connect to, keyed by namespace                |
+| `allowTools`         | string[] | —      | Allowlist of namespaced names (globs allowed)            |
+| `denyTools`          | string[] | —      | Denylist of namespaced names (globs allowed)             |
+| `connectTimeout`     | number  | 30000   | Time to wait for a server to connect (ms)                |
+| `toolTimeout`        | number  | 60000   | Time a single tool call may take (ms)                    |
+| `namespaceSeparator` | string  | `__`    | Separator between server name and tool name              |
+| `strict`             | boolean | false   | Fail the whole connect when any server fails             |
+| `autoReconnect`      | boolean | true    | Reconnect and retry once when a connection drops         |
+
+**Methods:** `getTools()`, `getServerTools(name)`, `getRawTools(name)`,
+`listResources(name)`, `callTool(name, params)`, `listServers()`, `getStats()`,
+`getCallLog()`, `getServerLogs(name)`, `reconnect(name)`, `close()`.
+
+---
+
+## CLI: inspect an MCP server
+
+`inspect` connects to any MCP server, lists what it publishes, validates its
+tool schemas and times the round-trips. It needs no config and no code — point
+it at a server and read the report.
+
+```bash
+npx mcp-agent-kit inspect npx -y @modelcontextprotocol/server-filesystem ./
+```
+
+```
+Target     npx -y @modelcontextprotocol/server-filesystem ./
+Transport  stdio
+
+✓ connected in 2453ms
+✓ 14 tool(s), 0 resource(s) listed in 2ms
+
+TOOLS
+  ⚠ read_file                  { path: string, tail?: number, head?: number }
+  ✓ read_multiple_files        { paths: array }
+  ⚠ write_file                 { path: string, content: string }
+  ...
+
+ISSUES
+  ⚠ read_file: property "path" has no description
+
+Summary  14 tool(s) · 0 resource(s) · 0 errors · 18 warning(s)
+```
+
+### What it validates
+
+Errors are things a real client will reject; warnings are things that make a
+model choose worse:
+
+| Level | Check                                                                 |
+| ----- | --------------------------------------------------------------------- |
+| Error | Tool name outside `[a-zA-Z0-9_-]{1,64}` — OpenAI and Anthropic reject it |
+| Error | `required` lists a key that `properties` does not declare              |
+| Error | Missing `inputSchema`, or `type` other than `object`                   |
+| Error | Duplicate tool names                                                   |
+| Warning | Tool or property with no description                                 |
+| Warning | Property with no declared type                                       |
+
+### Call a tool
+
+```bash
+npx mcp-agent-kit inspect --call read_file --args '{"path":"README.md"}' \
+  npx -y @modelcontextprotocol/server-filesystem ./
+```
+
+### Remote servers
+
+```bash
+npx mcp-agent-kit inspect https://mcp.example.com/mcp -H "Authorization: Bearer $TOKEN"
+```
+
+### In CI
+
+`--json` gives machine-readable output, and the exit code is meaningful:
+`0` clean, `1` schema errors, `2` could not connect.
+
+```bash
+npx mcp-agent-kit inspect --json node ./my-server.js | jq '.issues'
+```
+
+### Options
+
+| Option            | Description                                            |
+| ----------------- | ------------------------------------------------------ |
+| `--json`          | Machine-readable output                                |
+| `--quiet`, `-q`   | Summary and issues only                                |
+| `--timeout <ms>`  | Connect and call timeout (default 30000)               |
+| `--header`, `-H`  | HTTP header, repeatable (`"Name: value"`)              |
+| `--env`, `-e`     | Environment variable for a stdio server, repeatable    |
+| `--call <tool>`   | Call a tool after inspecting                           |
+| `--args <json>`   | Arguments for `--call`                                 |
+
+> Options go before the target; everything after the target is the server's own
+> command line.
 
 ---
 
@@ -357,15 +592,15 @@ const router = createLLMRouter({
   rules: [
     {
       when: (input) => input.length < 200,
-      use: { provider: "openai", model: "gpt-4-turbo-preview" },
+      use: { provider: "openai", model: "gpt-4o" },
     },
     {
       when: (input) => input.includes("code"),
-      use: { provider: "anthropic", model: "claude-3-5-sonnet-20241022" },
+      use: { provider: "anthropic", model: "claude-opus-5" },
     },
     {
       default: true,
-      use: { provider: "openai", model: "gpt-4-turbo-preview" },
+      use: { provider: "openai", model: "gpt-4o" },
     },
   ],
 });
@@ -380,7 +615,7 @@ const router = createLLMRouter({
   rules: [...],
   fallback: {
     provider: 'openai',
-    model: 'gpt-4-turbo-preview'
+    model: 'gpt-4o'
   },
   retryAttempts: 3,
   logLevel: 'debug'
@@ -396,7 +631,7 @@ console.log(stats);
 
 const agents = router.listAgents();
 console.log(agents);
-// ['openai:gpt-4-turbo-preview', 'anthropic:claude-3-5-sonnet-20241022']
+// ['openai:gpt-4o', 'anthropic:claude-opus-5']
 ```
 
 ---
@@ -548,7 +783,8 @@ Check out the `/examples` directory for complete working examples:
 - `basic-agent.ts` - Simple agent usage
 - `smart-tool-calling.ts` - Smart tool calling with retry and caching
 - `mcp-server.ts` - MCP server with tools and resources
-- `mcp-server-websocket.ts` - MCP server with WebSocket
+- `mcp-server-http.ts` - MCP server over Streamable HTTP
+- `mcp-orchestrator.ts` - Connect to several MCP servers and hand them to an agent
 - `llm-router.ts` - Intelligent routing between LLMs
 - `chatbot-basic.ts` - Chatbot with conversation memory
 - `chatbot-with-router.ts` - Chatbot using router
@@ -589,8 +825,11 @@ Creates a new AI agent instance.
 
 **Methods:**
 
-- `chat(message: string): Promise<AgentResponse>` - Send a message and get response
+- `chat(message: string | AgentMessage[]): Promise<AgentResponse>` - Send a message and get the final answer, running any tools the model asks for
 - `executeTool(name: string, params: any): Promise<any>` - Execute a tool directly
+- `registerTools(tools: AgentTool[]): Agent` - Add tools to a live agent
+- `listTools(): AgentTool[]` - Tools currently visible to the model
+- `cleanup(): void` - Release cache timers
 
 #### `AgentResponse`
 
@@ -598,12 +837,20 @@ Response object from agent.chat():
 
 ```typescript
 {
-  content: string;           // Response text
-  toolCalls?: Array<{        // Tools that were called
+  content: string;           // Final response text
+  toolCalls?: Array<{        // Tools still pending (empty once the loop finishes)
+    id?: string;
     name: string;
     arguments: any;
   }>;
-  usage?: {                  // Token usage
+  toolResults?: Array<{      // Tools executed while producing this response
+    toolCallId: string;
+    name: string;
+    result: any;
+    isError?: boolean;
+  }>;
+  iterations?: number;       // Model round-trips taken (1 when no tool ran)
+  usage?: {                  // Token usage, summed across every round-trip
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
@@ -625,7 +872,7 @@ Creates a new MCP server instance.
 - `tools` (optional): Array of tool definitions
 - `resources` (optional): Array of resource definitions
 
-**Returns:** MCP Server instance
+**Returns:** `Promise<MCPServer>` — the function is async (it loads the MCP SDK first), so always `await` it
 
 **Methods:**
 
@@ -668,7 +915,7 @@ Creates a new chatbot instance with conversation memory.
 
 **Methods:**
 
-- `chat(message: string): Promise<AgentResponse>` - Send message with context
+- `chat(message: string): Promise<string>` - Send message with context, returns the reply text
 - `getHistory(): ChatMessage[]` - Get conversation history
 - `getStats(): object` - Get conversation statistics
 - `reset(): void` - Clear conversation history
