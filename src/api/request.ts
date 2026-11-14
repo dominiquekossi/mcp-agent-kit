@@ -28,7 +28,20 @@ class APIClient {
       retries = 3,
     } = config;
 
-    this.logger.info(`[${name}] ${method} ${url}`);
+    let target: URL;
+    try {
+      target = new URL(url);
+    } catch {
+      throw new Error(`Invalid URL: ${url.split('?')[0]}`);
+    }
+    if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+      throw new Error(`Unsupported URL protocol: ${target.protocol}`);
+    }
+
+    // Log without credentials or query string: both can carry secrets.
+    this.logger.info(
+      `[${name}] ${method} ${target.origin}${target.pathname}`
+    );
 
     let lastError: Error | null = null;
     const startTime = Date.now();

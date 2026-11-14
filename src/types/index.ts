@@ -30,6 +30,16 @@ export interface MCPServerConfig {
   port?: number;
   /** HTTP path MCP is served at when using the http transport. Default: /mcp */
   path?: string;
+  /** Interface the HTTP transport binds to. Default: 127.0.0.1 (local only). */
+  host?: string;
+  /** When set, HTTP requests must send `Authorization: Bearer <authToken>`. */
+  authToken?: string;
+  /** Browser origins allowed to call the HTTP transport. Default: none. */
+  allowedOrigins?: string[];
+  /** Extra Host header values accepted (DNS rebinding protection). */
+  allowedHosts?: string[];
+  /** Max HTTP request body in bytes. Default: 1048576 (1 MB). */
+  maxBodyBytes?: number;
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
   tools?: MCPTool[];
   resources?: MCPResource[];

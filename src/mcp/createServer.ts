@@ -3,6 +3,7 @@
  */
 
 import { createServer as createHttpServer, Server as HttpServer } from "http";
+import { timingSafeEqual } from "crypto";
 import { MCPServerConfig, MCPTool, MCPResource } from "../types";
 import { getEnv } from "../core/env";
 import { logger, createLogger, Logger } from "../core/logger";
@@ -44,6 +45,36 @@ async function loadMCPSDK() {
   }
 }
 
+/**
+ * Minimal check of tool arguments against the tool's inputSchema:
+ * object shape, required keys, and primitive types of declared properties.
+ */
+function validateToolArgs(tool: MCPTool, args: unknown): string | null {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) {
+    return "arguments must be an object";
+  }
+  const input = args as Record<string, unknown>;
+
+  for (const key of tool.inputSchema.required || []) {
+    if (input[key] === undefined) return `missing required field "${key}"`;
+  }
+
+  const props = tool.inputSchema.properties || {};
+  for (const [key, value] of Object.entries(input)) {
+    const expected = props[key]?.type;
+    if (!expected || value === undefined || value === null) continue;
+    const actual = Array.isArray(value) ? "array" : typeof value;
+    const ok =
+      expected === "integer"
+        ? Number.isInteger(value)
+        : ["string", "number", "boolean", "object", "array"].includes(expected)
+          ? actual === expected
+          : true;
+    if (!ok) return `field "${key}" must be of type ${expected}`;
+  }
+  return null;
+}
+
 export class MCPServer {
   private server: any;
   private config: MCPServerConfig;
@@ -62,6 +93,11 @@ export class MCPServer {
       name: config.name || env.mcpServerName,
       port: config.port || env.mcpPort,
       path: config.path || '/mcp',
+      host: config.host || '127.0.0.1',
+      authToken: config.authToken,
+      allowedOrigins: config.allowedOrigins || [],
+      allowedHosts: config.allowedHosts || [],
+      maxBodyBytes: config.maxBodyBytes || 1024 * 1024,
       logLevel: config.logLevel || env.logLevel,
       tools: config.tools || [],
       resources: config.resources || [],
@@ -133,7 +169,11 @@ export class MCPServer {
       CallToolRequestSchema,
       async (request: any) => {
         const { name, arguments: args } = request.params;
-        this.logger.debug(`Tool called: ${name}`, args);
+        // Log only argument names: values can hold secrets or personal data.
+        this.logger.debug(
+          `Tool called: ${name}`,
+          args && typeof args === "object" ? Object.keys(args) : []
+        );
 
         const tool = this.tools.get(name);
         if (!tool) {
@@ -141,6 +181,10 @@ export class MCPServer {
         }
 
         try {
+          const problem = validateToolArgs(tool, args || {});
+          if (problem) {
+            throw new Error(`Invalid arguments for ${name}: ${problem}`);
+          }
           const result = await tool.handler(args || {});
           this.logger.debug(`Tool ${name} executed successfully`);
           return {
@@ -224,7 +268,7 @@ export class MCPServer {
     await new Promise<void>((resolve, reject) => {
       const onError = (error: Error) => reject(error);
       this.httpServer!.once("error", onError);
-      this.httpServer!.listen(port, () => {
+      this.httpServer!.listen(port, this.config.host, () => {
         this.httpServer!.off("error", onError);
         resolve();
       });
@@ -244,6 +288,8 @@ export class MCPServer {
         req.url || "/",
         `http://${req.headers.host || "localhost"}`
       );
+
+      if (!this.isRequestAllowed(req, res)) return;
 
       if (url.pathname !== path) {
         res.writeHead(404, { "Content-Type": "application/json" });
@@ -271,17 +317,83 @@ export class MCPServer {
       this.logger.error("HTTP request failed:", error.message);
 
       if (!res.headersSent) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: error.message }));
+        const tooLarge = error?.code === "BODY_TOO_LARGE";
+        const badJson = error?.code === "BAD_JSON";
+        res.writeHead(tooLarge ? 413 : badJson ? 400 : 500, {
+          "Content-Type": "application/json",
+        });
+        // Internal error details stay in the log, not in the response.
+        res.end(
+          JSON.stringify({
+            error: tooLarge
+              ? "Request body too large"
+              : badJson
+                ? "Request body is not valid JSON"
+                : "Internal server error",
+          })
+        );
       }
     }
+  }
+
+  /**
+   * Guards for the HTTP transport: Host allow-list (DNS rebinding), Origin
+   * allow-list (browser callers) and optional bearer token. Writes the
+   * error response and returns false when the request is refused.
+   */
+  private isRequestAllowed(req: any, res: any): boolean {
+    const deny = (status: number, message: string): false => {
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: message }));
+      return false;
+    };
+
+    const port = this.config.port;
+    const hostHeader = String(req.headers.host || "").toLowerCase();
+    const allowedHosts = new Set(
+      [
+        `localhost:${port}`,
+        `127.0.0.1:${port}`,
+        `[::1]:${port}`,
+        ...(this.config.allowedHosts || []),
+      ].map((h) => h.toLowerCase())
+    );
+    if (!allowedHosts.has(hostHeader)) return deny(403, "Host not allowed");
+
+    const origin = req.headers.origin;
+    if (origin && !(this.config.allowedOrigins || []).includes(origin)) {
+      return deny(403, "Origin not allowed");
+    }
+
+    if (this.config.authToken) {
+      const supplied = String(req.headers.authorization || "");
+      const expected = `Bearer ${this.config.authToken}`;
+      const a = Buffer.from(supplied);
+      const b = Buffer.from(expected);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) {
+        return deny(401, "Unauthorized");
+      }
+    }
+    return true;
   }
 
   private readJsonBody(req: any): Promise<any> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
+      const limit = this.config.maxBodyBytes!;
+      let received = 0;
 
-      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("data", (chunk: Buffer) => {
+        received += chunk.length;
+        if (received > limit) {
+          const error: any = new Error("Request body too large");
+          error.code = "BODY_TOO_LARGE";
+          req.destroy();
+          reject(error);
+          return;
+        }
+        chunks.push(chunk);
+      });
       req.on("error", reject);
       req.on("end", () => {
         const raw = Buffer.concat(chunks).toString("utf8");
@@ -294,7 +406,9 @@ export class MCPServer {
         try {
           resolve(JSON.parse(raw));
         } catch {
-          reject(new Error("Request body is not valid JSON"));
+          const error: any = new Error("Request body is not valid JSON");
+          error.code = "BAD_JSON";
+          reject(error);
         }
       });
     });
