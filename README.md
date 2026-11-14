@@ -374,6 +374,11 @@ const server = await createMCPServer({
 await server.start("http"); // Serves MCP at http://localhost:8080/mcp
 ```
 
+The HTTP transport binds to `127.0.0.1` by default. To expose it beyond your
+machine, set `host`, and also set `authToken` (clients send
+`Authorization: Bearer <token>`), `allowedHosts` and, for browser callers,
+`allowedOrigins`. Request bodies are limited to 1 MB (`maxBodyBytes`).
+
 > The `websocket` transport was removed in v1.2.0. It accepted connections but
 > was never wired to the MCP server, so it answered no requests while reporting
 > itself as healthy. Use `"http"` (Streamable HTTP) instead — it is the

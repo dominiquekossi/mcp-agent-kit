@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- HTTP transport now binds to `127.0.0.1` by default (new `host` option). It
+  used to listen on every network interface with no authentication.
+- New `authToken` option: when set, requests need `Authorization: Bearer <token>`
+  (constant-time comparison).
+- Host and Origin checks (`allowedHosts`, `allowedOrigins`) against DNS
+  rebinding and unwanted browser callers.
+- Request body limit (`maxBodyBytes`, default 1 MB) returns 413 instead of
+  buffering without bound.
+- Tool arguments are validated against the tool `inputSchema` (object shape,
+  required fields, primitive types) before the handler runs.
+- Internal errors return a generic 500 message; details stay in the log.
+- Debug logs record argument names only, and `api` request logs omit the query
+  string and credentials. `api` requests accept only http and https URLs.
+
 ## [1.2.0] - 2026-09-07
 
 The headline is the MCP orchestrator. Everything before it is a correctness
